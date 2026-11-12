@@ -112,6 +112,7 @@ fix(export): preserve leading zeros in postal codes
   - the full test suite
   - lint
   - build
+- CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit tests and E2E (which includes the build and the privacy test) on every pull request and push to `develop` and `main`. The Playwright report is uploaded as an artifact when it fails.
 - Any change that adds or modifies an outbound network call must also:
   - document the call in the [outbound calls registry](#outbound-calls-registry)
   - include a test asserting that no file data is sent

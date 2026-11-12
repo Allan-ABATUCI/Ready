@@ -21,10 +21,14 @@ test("profiles a file and shows duplicates side by side", async ({ page }) => {
   await page.getByRole("button", { name: /Merge all exact matches \(2\)/ }).click();
   await expect(page.getByTestId("review-progress")).toContainText("2 to merge");
 
+  await page.getByLabel("HubSpot").check();
+  await expect(page.getByTestId("export-summary")).toContainText("9 rows → 7 after merging");
+
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download CSV" }).click();
   const file = readFileSync((await (await download).path())!, "utf8");
   const lines = file.trim().split(/\r\n/);
-  expect(lines[0]).toBe("Full Name,Email,Phone,Company");
+  expect((await download).suggestedFilename()).toBe("ready-hubspot.csv");
+  expect(lines[0]).toBe("First Name,Last Name,Email,Phone Number,Company Name");
   expect(lines).toHaveLength(1 + 7);
 });

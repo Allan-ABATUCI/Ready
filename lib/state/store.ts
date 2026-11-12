@@ -2,8 +2,9 @@
 
 import { create } from "zustand";
 import { isExactMatch, pairKey, type Decisions, type FieldSide, type PairAction } from "@/lib/data-plane/merge";
+import { DEFAULT_EXPORT_OPTIONS, type ExportOptions } from "@/lib/data-plane/export-table";
 import type { ProcessResult } from "@/lib/data-plane/types";
-import type { RulePackManifest } from "@/lib/rule-packs/types";
+import type { Crm, RulePackManifest } from "@/lib/rule-packs/types";
 
 export type Status = "idle" | "processing" | "ready" | "error";
 
@@ -18,6 +19,9 @@ export interface ReadyState {
   selectedCandidate: number;
   /** Merge decisions keyed by `pairKey` ("a:b"). */
   decisions: Decisions;
+  /** Destination CRM picked by the user; export is disabled until set. */
+  crm: Crm | null;
+  exportOptions: ExportOptions;
   manifest: RulePackManifest | null;
 
   startProcessing: (fileName: string) => void;
@@ -30,6 +34,8 @@ export interface ReadyState {
   chooseField: (index: number, col: number, side: FieldSide) => void;
   /** Mark every undecided exact match (see `isExactMatch`) as "merge". */
   mergeAllExact: () => void;
+  setCrm: (crm: Crm) => void;
+  setExportOption: (key: keyof ExportOptions, value: boolean) => void;
   setManifest: (manifest: RulePackManifest | null) => void;
   reset: () => void;
 }
@@ -40,6 +46,8 @@ const initial = {
   result: null,
   selectedCandidate: 0,
   decisions: {} as Decisions,
+  crm: null as Crm | null,
+  exportOptions: DEFAULT_EXPORT_OPTIONS,
 };
 
 export const useReadyStore = create<ReadyState>()((set, get) => {
@@ -78,6 +86,8 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
       }
       set({ decisions: next });
     },
+    setCrm: (crm) => set({ crm }),
+    setExportOption: (key, value) => set({ exportOptions: { ...get().exportOptions, [key]: value } }),
     setManifest: (manifest) => set({ manifest }),
     reset: () => set(initial),
   };

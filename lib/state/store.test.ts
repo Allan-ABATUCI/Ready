@@ -50,6 +50,22 @@ describe("useReadyStore", () => {
     expect(useReadyStore.getState().decisions).toEqual({});
   });
 
+  it("tracks the destination CRM and export options, and resets them", () => {
+    const s = useReadyStore.getState();
+    expect(useReadyStore.getState().crm).toBeNull();
+    s.setCrm("pipedrive");
+    s.setExportOption("fixCase", false);
+    expect(useReadyStore.getState()).toMatchObject({
+      crm: "pipedrive",
+      exportOptions: { trim: true, lowercaseEmails: true, fixCase: false },
+    });
+    s.reset();
+    expect(useReadyStore.getState()).toMatchObject({
+      crm: null,
+      exportOptions: { trim: true, lowercaseEmails: true, fixCase: true },
+    });
+  });
+
   it("does not persist anything to web storage", () => {
     useReadyStore.getState().startProcessing("secret-name.csv");
     expect(window.localStorage.length).toBe(0);

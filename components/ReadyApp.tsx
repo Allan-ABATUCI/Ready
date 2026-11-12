@@ -7,6 +7,7 @@ import { processFileInWorker } from "@/lib/data-plane/run";
 import { useReadyStore } from "@/lib/state/store";
 import { DuplicateReview } from "./DuplicateReview";
 import { FileDrop } from "./FileDrop";
+import { IssuesSummary } from "./IssuesSummary";
 import { ProfileSummary } from "./ProfileSummary";
 
 export function ReadyApp() {
@@ -44,6 +45,7 @@ export function ReadyApp() {
       {status === "ready" && result && (
         <>
           <ProfileSummary profile={result.profile} rowCount={result.parsed.rows.length} />
+          <IssuesSummary headers={result.parsed.headers} rows={result.parsed.rows} issues={result.cellIssues} />
           <DuplicateReview
             parsed={result.parsed}
             candidates={result.duplicates}

@@ -12,6 +12,7 @@ describe("useReadyStore", () => {
       parsed: { headers: [], rows: [], delimiter: ",", hadBom: false, issues: [] },
       profile: [],
       duplicates: [],
+      cellIssues: [],
     });
     expect(useReadyStore.getState().status).toBe("ready");
     s.reset();

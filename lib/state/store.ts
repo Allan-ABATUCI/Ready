@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { isExactMatch, pairKey, type Decisions, type FieldSide, type PairAction } from "@/lib/data-plane/merge";
 import { DEFAULT_EXPORT_OPTIONS, type ExportOptions } from "@/lib/data-plane/export-table";
-import type { ProcessResult } from "@/lib/data-plane/types";
+import type { ProcessResult, Stage } from "@/lib/data-plane/types";
 import type { Crm, RulePack, RulePackManifest, RulePackStatus } from "@/lib/rule-packs/types";
 
 export type Status = "idle" | "processing" | "ready" | "error";
@@ -15,6 +15,8 @@ export type Status = "idle" | "processing" | "ready" | "error";
 export interface ReadyState {
   status: Status;
   fileName: string | null;
+  /** Current pipeline stage while processing; null otherwise. */
+  stage: Stage | null;
   result: ProcessResult | null;
   selectedCandidate: number;
   /** Merge decisions keyed by `pairKey` ("a:b"). */
@@ -28,6 +30,7 @@ export interface ReadyState {
   manifest: RulePackManifest | null;
 
   startProcessing: (fileName: string) => void;
+  setStage: (stage: Stage) => void;
   finishProcessing: (result: ProcessResult) => void;
   failProcessing: () => void;
   selectCandidate: (index: number) => void;
@@ -48,6 +51,7 @@ export interface ReadyState {
 const initial = {
   status: "idle" as Status,
   fileName: null,
+  stage: null as Stage | null,
   result: null,
   selectedCandidate: 0,
   decisions: {} as Decisions,
@@ -67,8 +71,12 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
     ...initial,
     manifest: null,
     startProcessing: (fileName) => set({ ...initial, status: "processing", fileName }),
-    finishProcessing: (result) => set({ status: "ready", result, selectedCandidate: 0, decisions: {} }),
-    failProcessing: () => set({ status: "error", result: null, decisions: {} }),
+    // A late progress message must not flip a finished or failed run back to a stage.
+    setStage: (stage) => {
+      if (get().status === "processing") set({ stage });
+    },
+    finishProcessing: (result) => set({ status: "ready", stage: null, result, selectedCandidate: 0, decisions: {} }),
+    failProcessing: () => set({ status: "error", stage: null, result: null, decisions: {} }),
     selectCandidate: (selectedCandidate) => set({ selectedCandidate }),
     decide: (index, action) => {
       const key = keyOf(index);

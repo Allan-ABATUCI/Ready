@@ -155,6 +155,8 @@ cp .env.example .env.local        # optional locally; see comments in the file
 npm run dev                       # http://localhost:3000
 ```
 
+Open the dev server at `http://localhost:3000` (or `127.0.0.1:3000`). Through a LAN IP, Next blocks its dev scripts, so the page shows "Loading…" and never becomes interactive.
+
 | Task                            | Command                                                     |
 | ------------------------------- | ----------------------------------------------------------- |
 | Unit and component tests        | `npm test` (`npm run test:watch` for watch mode)            |

@@ -1,13 +1,24 @@
 "use client";
 
-import type { ColumnProfile } from "@/lib/data-plane/types";
+import type { ColumnProfile, CsvEncoding } from "@/lib/data-plane/types";
 
-export function ProfileSummary({ profile, rowCount }: { profile: ColumnProfile[]; rowCount: number }) {
+export interface ProfileSummaryProps {
+  profile: ColumnProfile[];
+  rowCount: number;
+  encoding?: CsvEncoding;
+}
+
+export function ProfileSummary({ profile, rowCount, encoding = "utf-8" }: ProfileSummaryProps) {
   return (
     <section aria-labelledby="profile-heading" className="rounded-xl bg-white p-6 shadow-sm">
       <h2 id="profile-heading" className="text-lg font-semibold text-slate-900">
         Columns <span className="font-normal text-slate-500">({rowCount} rows)</span>
       </h2>
+      {encoding === "windows-1252" && (
+        <p className="mt-1 text-xs text-slate-500" data-testid="encoding-note">
+          Read as Windows-1252 (the file wasn&apos;t UTF-8, as is common for files saved by Excel).
+        </p>
+      )}
       <table className="mt-4 w-full text-left text-sm">
         <thead className="text-slate-500">
           <tr>

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { fetchRulePackManifest } from "@/lib/control-plane-client/rule-packs";
 import { processFileInWorker } from "@/lib/data-plane/run";
+import type { Stage } from "@/lib/data-plane/types";
 import { loadVerifiedRulePack } from "@/lib/rule-packs/load";
 import { useReadyStore } from "@/lib/state/store";
 import { DuplicateReview } from "./DuplicateReview";
@@ -11,10 +12,18 @@ import { FileDrop } from "./FileDrop";
 import { IssuesSummary } from "./IssuesSummary";
 import { ProfileSummary } from "./ProfileSummary";
 
+const STAGE_TEXT: Record<Stage, string> = {
+  parsing: "Reading your file…",
+  profiling: "Looking at your columns…",
+  matching: "Finding duplicates…",
+  checking: "Checking values…",
+};
+
 export function ReadyApp() {
   // This component renders nearly all of the store, so one subscription is simplest.
   const {
     status,
+    stage,
     result,
     selectedCandidate,
     decisions,
@@ -24,6 +33,7 @@ export function ReadyApp() {
     rulePackStatus,
     manifest,
     startProcessing,
+    setStage,
     finishProcessing,
     failProcessing,
     selectCandidate,
@@ -49,7 +59,7 @@ export function ReadyApp() {
   const onFile = async (file: File) => {
     startProcessing(file.name);
     try {
-      finishProcessing(await processFileInWorker(file));
+      finishProcessing(await processFileInWorker(file, setStage));
     } catch {
       failProcessing();
     }
@@ -65,18 +75,23 @@ export function ReadyApp() {
       <FileDrop onFile={onFile} disabled={status === "processing"} />
 
       <p role="status" aria-live="polite" className="text-sm text-slate-600" data-testid="status">
-        {status === "processing" && "Processing in your browser…"}
+        {status === "processing" && (stage ? STAGE_TEXT[stage] : "Processing in your browser…")}
         {status === "error" && "We couldn't read that file. Is it a CSV?"}
         {status === "ready" && "Done."}
       </p>
 
       {status === "ready" && result && (
         <>
-          <ProfileSummary profile={result.profile} rowCount={result.parsed.rows.length} />
+          <ProfileSummary
+            profile={result.profile}
+            rowCount={result.parsed.rows.length}
+            encoding={result.parsed.encoding}
+          />
           <IssuesSummary headers={result.parsed.headers} rows={result.parsed.rows} issues={result.cellIssues} />
           <DuplicateReview
             parsed={result.parsed}
             candidates={result.duplicates}
+            skippedLargeBlocks={result.skippedLargeBlocks}
             selected={selectedCandidate}
             onSelect={selectCandidate}
             decisions={decisions}

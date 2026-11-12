@@ -1,19 +1,39 @@
 import "client-only";
 import Papa from "papaparse";
-import type { CsvRow, ParsedCsv } from "./types";
+import type { CsvEncoding, CsvRow, ParsedCsv } from "./types";
 
 const BOM = "﻿";
 const DELIMITERS = [",", ";", "\t", "|"];
+/** Excel's delimiter hint, written as the first line of some exports. */
+const SEP_LINE = /^sep=(.)\r?$/i;
+
+/**
+ * Decode file bytes. Valid UTF-8 is read as UTF-8; anything else falls back to
+ * Windows-1252, which is what Excel on Windows writes for "CSV (comma delimited)".
+ * Every byte sequence is valid Windows-1252, so the fallback never throws.
+ */
+export function decodeCsvBytes(bytes: Uint8Array): { text: string; encoding: CsvEncoding } {
+  try {
+    // ignoreBOM keeps the BOM in the text so parseCsv can report `hadBom`.
+    return { text: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes), encoding: "utf-8" };
+  } catch {
+    return { text: new TextDecoder("windows-1252").decode(bytes), encoding: "windows-1252" };
+  }
+}
 
 /** Parse CSV text entirely in memory. Handles BOMs, quoted/multiline fields and common delimiters. */
-export function parseCsv(text: string): ParsedCsv {
+export function parseCsv(text: string, encoding: CsvEncoding = "utf-8"): ParsedCsv {
   const hadBom = text.startsWith(BOM);
-  const input = hadBom ? text.slice(BOM.length) : text;
+  let input = hadBom ? text.slice(BOM.length) : text;
+
+  const newline = input.indexOf("\n");
+  const sep = SEP_LINE.exec(newline === -1 ? input : input.slice(0, newline));
+  if (sep) input = newline === -1 ? "" : input.slice(newline + 1);
 
   const result = Papa.parse<string[]>(input, {
     header: false,
     skipEmptyLines: "greedy",
-    delimitersToGuess: DELIMITERS,
+    ...(sep ? { delimiter: sep[1] } : { delimitersToGuess: DELIMITERS }),
   });
 
   const [headerRow = [], ...body] = result.data;
@@ -25,7 +45,7 @@ export function parseCsv(text: string): ParsedCsv {
     .filter((e) => e.code !== "UndetectableDelimiter")
     .map((e) => ({ row: typeof e.row === "number" ? Math.max(e.row - 1, 0) : null, code: e.code }));
 
-  return { headers, rows, delimiter: result.meta.delimiter, hadBom, issues };
+  return { headers, rows, delimiter: result.meta.delimiter, hadBom, encoding, issues };
 }
 
 function fitWidth(row: CsvRow, width: number): CsvRow {

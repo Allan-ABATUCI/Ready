@@ -7,11 +7,15 @@ export interface CsvIssue {
   code: string;
 }
 
+/** How the file's bytes were decoded. */
+export type CsvEncoding = "utf-8" | "windows-1252";
+
 export interface ParsedCsv {
   headers: string[];
   rows: CsvRow[];
   delimiter: string;
   hadBom: boolean;
+  encoding: CsvEncoding;
   issues: CsvIssue[];
 }
 
@@ -56,5 +60,10 @@ export interface ProcessResult {
   parsed: ParsedCsv;
   profile: ColumnProfile[];
   duplicates: DuplicateCandidate[];
+  /** Rows in very common name groups that weren't compared by name (see MAX_BLOCK in dedupe.ts). */
+  skippedLargeBlocks: number;
   cellIssues: CellIssue[];
 }
+
+/** Pipeline stages reported to the UI. Names only: never counts or values. */
+export type Stage = "parsing" | "profiling" | "matching" | "checking";

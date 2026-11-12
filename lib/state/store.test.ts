@@ -9,9 +9,10 @@ describe("useReadyStore", () => {
     s.startProcessing("contacts.csv");
     expect(useReadyStore.getState()).toMatchObject({ status: "processing", fileName: "contacts.csv" });
     s.finishProcessing({
-      parsed: { headers: [], rows: [], delimiter: ",", hadBom: false, issues: [] },
+      parsed: { headers: [], rows: [], delimiter: ",", hadBom: false, encoding: "utf-8", issues: [] },
       profile: [],
       duplicates: [],
+      skippedLargeBlocks: 0,
       cellIssues: [],
     });
     expect(useReadyStore.getState().status).toBe("ready");
@@ -19,16 +20,37 @@ describe("useReadyStore", () => {
     expect(useReadyStore.getState()).toMatchObject({ status: "idle", fileName: null, result: null });
   });
 
+  it("tracks the current stage only while processing", () => {
+    const s = useReadyStore.getState();
+    s.setStage("matching");
+    expect(useReadyStore.getState().stage).toBeNull(); // not processing yet
+    s.startProcessing("contacts.csv");
+    s.setStage("parsing");
+    s.setStage("matching");
+    expect(useReadyStore.getState().stage).toBe("matching");
+    s.failProcessing();
+    s.setStage("checking"); // a late message after the run ended
+    expect(useReadyStore.getState()).toMatchObject({ status: "error", stage: null });
+  });
+
   it("records merge decisions and field picks, and clears them on reset", () => {
     const s = useReadyStore.getState();
     s.finishProcessing({
-      parsed: { headers: ["Name"], rows: [["A"], ["a"], ["B"], ["b"]], delimiter: ",", hadBom: false, issues: [] },
+      parsed: {
+        headers: ["Name"],
+        rows: [["A"], ["a"], ["B"], ["b"]],
+        delimiter: ",",
+        hadBom: false,
+        encoding: "utf-8",
+        issues: [],
+      },
       profile: [],
       duplicates: [
         { a: 0, b: 1, score: 100, matchedOn: ["email"] },
         { a: 2, b: 3, score: 92, matchedOn: ["name"] },
         { a: 1, b: 2, score: 100, matchedOn: ["phone"] },
       ],
+      skippedLargeBlocks: 0,
       cellIssues: [],
     });
 

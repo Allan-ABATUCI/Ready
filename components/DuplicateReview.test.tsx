@@ -15,6 +15,7 @@ const parsed: ParsedCsv = {
   ],
   delimiter: ",",
   hadBom: false,
+  encoding: "utf-8",
   issues: [],
 };
 const candidates: DuplicateCandidate[] = [
@@ -41,7 +42,9 @@ function Harness() {
 
 beforeEach(() => {
   useReadyStore.getState().reset();
-  useReadyStore.getState().finishProcessing({ parsed, profile: [], duplicates: candidates, cellIssues: [] });
+  useReadyStore
+    .getState()
+    .finishProcessing({ parsed, profile: [], duplicates: candidates, skippedLargeBlocks: 0, cellIssues: [] });
 });
 
 describe("DuplicateReview", () => {
@@ -78,5 +81,14 @@ describe("DuplicateReview", () => {
     render(<DuplicateReview parsed={parsed} candidates={candidates} selected={0} onSelect={() => {}} />);
     expect(screen.queryByRole("button", { name: "Merge" })).toBeNull();
     expect(screen.queryByRole("radio")).toBeNull();
+  });
+
+  it("says when very common names weren't compared, and stays quiet otherwise", () => {
+    const { rerender } = render(
+      <DuplicateReview parsed={parsed} candidates={[]} selected={0} onSelect={() => {}} skippedLargeBlocks={250} />,
+    );
+    expect(screen.getByTestId("skipped-blocks")).toHaveTextContent("Some very common names weren't compared");
+    rerender(<DuplicateReview parsed={parsed} candidates={[]} selected={0} onSelect={() => {}} />);
+    expect(screen.queryByTestId("skipped-blocks")).not.toBeInTheDocument();
   });
 });

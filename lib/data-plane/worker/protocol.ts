@@ -1,7 +1,11 @@
-import type { ProcessResult } from "../types";
+import type { ProcessResult, Stage } from "../types";
 
 export interface ProcessRequest {
   file: File;
 }
 
-export type ProcessResponse = { ok: true; result: ProcessResult } | { ok: false; code: "parse_failed" };
+/** Messages carry stage names and codes only, never counts or values from the file. */
+export type ProcessResponse =
+  | { type: "progress"; stage: Stage }
+  | { type: "done"; result: ProcessResult }
+  | { type: "error"; code: "parse_failed" };

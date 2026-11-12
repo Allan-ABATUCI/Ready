@@ -13,6 +13,7 @@ const parsed: ParsedCsv = {
   ],
   delimiter: ",",
   hadBom: false,
+  encoding: "utf-8",
   issues: [],
 };
 

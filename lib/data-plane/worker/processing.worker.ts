@@ -1,4 +1,6 @@
+import { decodeCsvBytes } from "../csv";
 import { processCsv } from "../process";
+import type { Stage } from "../types";
 import type { ProcessRequest, ProcessResponse } from "./protocol";
 
 // Typed locally to avoid pulling the "webworker" lib into the global (DOM) tsconfig.
@@ -9,10 +11,13 @@ const ctx = self as unknown as {
 
 ctx.onmessage = async (e) => {
   try {
-    const text = await e.data.file.text();
-    ctx.postMessage({ ok: true, result: processCsv(text) });
+    // Bytes, not file.text(): text() always assumes UTF-8, and Excel often saves Windows-1252.
+    const { text, encoding } = decodeCsvBytes(new Uint8Array(await e.data.file.arrayBuffer()));
+    const onStage = (stage: Stage) => ctx.postMessage({ type: "progress", stage });
+    const result = processCsv(text, { encoding, onStage });
+    ctx.postMessage({ type: "done", result });
   } catch {
     // Never forward the error message — it could quote file content.
-    ctx.postMessage({ ok: false, code: "parse_failed" });
+    ctx.postMessage({ type: "error", code: "parse_failed" });
   }
 };

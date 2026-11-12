@@ -29,6 +29,10 @@ const csp = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Next 16 blocks dev scripts on any origin but localhost, so the page renders
+  // but never hydrates. 127.0.0.1 is safe to allow everywhere; LAN IPs are
+  // machine-specific and don't belong in the repo.
+  allowedDevOrigins: ["127.0.0.1"],
   reactStrictMode: true,
   async headers() {
     return [

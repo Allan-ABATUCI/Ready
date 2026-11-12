@@ -12,4 +12,15 @@ describe("processCsv", () => {
     expect(Array.isArray(a.cellIssues)).toBe(true);
     expect(processCsv(text)).toEqual(a);
   });
+
+  it("reports stages in pipeline order", () => {
+    const stages: string[] = [];
+    processCsv("Email\na@example.test\n", { onStage: (s) => stages.push(s) });
+    expect(stages).toEqual(["parsing", "profiling", "matching", "checking"]);
+  });
+
+  it("records the encoding it was given", () => {
+    expect(processCsv("a\n1\n").parsed.encoding).toBe("utf-8");
+    expect(processCsv("a\n1\n", { encoding: "windows-1252" }).parsed.encoding).toBe("windows-1252");
+  });
 });

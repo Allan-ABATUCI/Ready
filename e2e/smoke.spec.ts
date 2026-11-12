@@ -35,3 +35,21 @@ test("profiles a file and shows duplicates side by side", async ({ page }) => {
   expect(lines[0]).toBe("First Name,Last Name,Email,Phone Number,Company Name");
   expect(lines).toHaveLength(1 + 7);
 });
+
+test("reads an Excel-saved Windows-1252 file without mangling accents", async ({ page }) => {
+  await page.goto("/");
+  await page
+    .getByTestId("file-input")
+    .setInputFiles(path.join(__dirname, "..", "tests", "fixtures", "windows-1252.csv"));
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+  await expect(page.getByTestId("encoding-note")).toContainText("Read as Windows-1252");
+  await expect(page.getByRole("heading", { name: /Columns/ })).toContainText("3 rows");
+
+  await page.getByLabel("HubSpot").check();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download CSV" }).click();
+  const file = readFileSync((await (await download).path())!, "utf8");
+  expect(file).toContain("Zoë,Müller");
+  expect(file).toContain("Société Exemple");
+  expect(file).not.toContain("\uFFFD");
+});

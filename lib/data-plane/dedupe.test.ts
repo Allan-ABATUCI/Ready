@@ -1,10 +1,26 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { syntheticContacts } from "@/tests/support/synthetic";
 import { detectKeyColumns } from "./columns";
 import { parseCsv } from "./csv";
-import { findDuplicateCandidates } from "./dedupe";
+import { findDuplicateCandidates, keyRows, MAX_BLOCK, nameSignature, scorePair } from "./dedupe";
+import { applyDecisions, pairKey } from "./merge";
+import type { DuplicateCandidate, ParsedCsv } from "./types";
 
 const text = readFileSync("tests/fixtures/contacts-duplicates.csv", "utf8");
+
+/** The previous O(n²) implementation: the reference that blocking must reproduce. */
+function naiveCandidates(parsed: ParsedCsv): DuplicateCandidate[] {
+  const rows = keyRows(parsed);
+  const out: DuplicateCandidate[] = [];
+  for (let a = 0; a < rows.length; a++) {
+    for (let b = a + 1; b < rows.length; b++) {
+      const match = scorePair(rows[a]!, rows[b]!);
+      if (match) out.push({ a, b, ...match });
+    }
+  }
+  return out.sort((x, y) => y.score - x.score || x.a - y.a || x.b - y.b);
+}
 
 describe("detectKeyColumns", () => {
   it("recognizes common header spellings", () => {
@@ -18,8 +34,22 @@ describe("detectKeyColumns", () => {
   });
 });
 
+describe("nameSignature", () => {
+  it("folds accents and case, keeps 3-character prefixes and sorts tokens", () => {
+    expect(nameSignature("Zoë Müller")).toBe("mul zoe");
+    expect(nameSignature("zoe muller")).toBe("mul zoe");
+    expect(nameSignature("Muller Zoe")).toBe("mul zoe");
+  });
+
+  it("ignores one-letter tokens unless the name has nothing else", () => {
+    expect(nameSignature("J. Robert Example")).toBe("exa rob");
+    expect(nameSignature("J. K.")).toBe("j k");
+    expect(nameSignature("--")).toBe("");
+  });
+});
+
 describe("findDuplicateCandidates", () => {
-  const dupes = findDuplicateCandidates(parseCsv(text));
+  const { candidates: dupes } = findDuplicateCandidates(parseCsv(text));
   const pairs = dupes.map((d) => [d.a, d.b]);
 
   it("matches case-insensitive email + fuzzy name/company", () => {
@@ -39,7 +69,7 @@ describe("findDuplicateCandidates", () => {
   });
 
   it("is deterministic: identical output across runs, sorted by score then index", () => {
-    const again = findDuplicateCandidates(parseCsv(text));
+    const again = findDuplicateCandidates(parseCsv(text)).candidates;
     expect(again).toEqual(dupes);
     for (let i = 1; i < dupes.length; i++) {
       const p = dupes[i - 1]!;
@@ -50,11 +80,60 @@ describe("findDuplicateCandidates", () => {
 
   it("uses first + last name when there is no full-name column", () => {
     const parsed = parseCsv("First Name,Last Name\nAvery,Example\navery,example\nBo,Sample\n");
-    expect(findDuplicateCandidates(parsed).map((d) => [d.a, d.b])).toEqual([[0, 1]]);
+    expect(findDuplicateCandidates(parsed).candidates.map((d) => [d.a, d.b])).toEqual([[0, 1]]);
   });
 
   it("returns nothing for files without key columns or with empty cells", () => {
-    expect(findDuplicateCandidates(parseCsv("Foo,Bar\n1,2\n1,2\n"))).toEqual([]);
-    expect(findDuplicateCandidates(parseCsv("Email,Phone\n,\n,\n"))).toEqual([]);
+    expect(findDuplicateCandidates(parseCsv("Foo,Bar\n1,2\n1,2\n")).candidates).toEqual([]);
+    expect(findDuplicateCandidates(parseCsv("Email,Phone\n,\n,\n")).candidates).toEqual([]);
+  });
+});
+
+describe("blocking is equivalent to the pairwise scan", () => {
+  const fixtures = readdirSync("tests/fixtures").filter((f) => f.endsWith(".csv"));
+
+  it.each(fixtures)("on fixture %s", (name) => {
+    const parsed = parseCsv(readFileSync(`tests/fixtures/${name}`, "utf8"));
+    expect(findDuplicateCandidates(parsed)).toEqual({ candidates: naiveCandidates(parsed), skippedLargeBlocks: 0 });
+  });
+
+  it("on a 400-row synthetic file with injected near-duplicates", () => {
+    const parsed = parseCsv(syntheticContacts({ rows: 400, seed: 42, dupRate: 0.15 }));
+    const expected = naiveCandidates(parsed);
+    expect(expected.length).toBeGreaterThan(30); // the generator really did inject duplicates
+    expect(findDuplicateCandidates(parsed)).toEqual({ candidates: expected, skippedLargeBlocks: 0 });
+  });
+});
+
+describe("block-size guard", () => {
+  it("links a large exact block as a star, and merging still collapses every row", () => {
+    // Email only, so no name matches muddy the count.
+    const parsed = parseCsv(["Email", ...Array<string>(300).fill("same@example.test")].join("\n"));
+    const { candidates } = findDuplicateCandidates(parsed);
+
+    expect(candidates).toHaveLength(299);
+    expect(candidates.every((c) => c.a === 0 && c.matchedOn.join() === "email")).toBe(true);
+
+    const decisions = Object.fromEntries(candidates.map((c) => [pairKey(c), { action: "merge" as const, fields: {} }]));
+    expect(applyDecisions(parsed, candidates, decisions).rows).toHaveLength(1);
+  });
+
+  it("skips name blocks over MAX_BLOCK and reports how many rows were skipped", () => {
+    const common = Array.from({ length: MAX_BLOCK + 1 }, () => "Avery Example");
+    const parsed = parseCsv(["Full Name", ...common, "Bo Sample", "bo sample"].join("\n"));
+    const { candidates, skippedLargeBlocks } = findDuplicateCandidates(parsed);
+    expect(skippedLargeBlocks).toBe(MAX_BLOCK + 1);
+    expect(candidates.map((c) => [c.a, c.b])).toEqual([[MAX_BLOCK + 1, MAX_BLOCK + 2]]);
+  });
+});
+
+describe("performance", () => {
+  it("handles 20,000 rows with varied names in under 3 s", () => {
+    const parsed = parseCsv(syntheticContacts({ rows: 20_000, seed: 7 }));
+    const start = performance.now();
+    const { candidates } = findDuplicateCandidates(parsed);
+    const ms = performance.now() - start;
+    expect(candidates.length).toBeGreaterThan(0);
+    expect(ms).toBeLessThan(3000);
   });
 });

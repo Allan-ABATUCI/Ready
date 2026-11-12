@@ -7,6 +7,8 @@ import { MergePreview } from "./MergePreview";
 export interface DuplicateReviewProps {
   parsed: ParsedCsv;
   candidates: DuplicateCandidate[];
+  /** Rows in very common name groups that weren't compared by name. */
+  skippedLargeBlocks?: number;
   selected: number;
   onSelect: (index: number) => void;
   decisions?: Decisions;
@@ -24,6 +26,7 @@ const STATUS: Record<PairAction | "undecided", string> = {
 export function DuplicateReview({
   parsed,
   candidates,
+  skippedLargeBlocks = 0,
   selected,
   onSelect,
   decisions = {},
@@ -42,6 +45,13 @@ export function DuplicateReview({
       <h2 id="dupes-heading" className="text-lg font-semibold text-slate-900">
         Possible duplicates <span className="font-normal text-slate-500">({candidates.length})</span>
       </h2>
+
+      {skippedLargeBlocks > 0 && (
+        <p className="mt-2 text-sm text-amber-700" data-testid="skipped-blocks">
+          Some very common names weren&apos;t compared by name ({skippedLargeBlocks} rows). Matches on email and phone
+          are still found.
+        </p>
+      )}
 
       {!current ? (
         <p className="mt-2 text-sm text-slate-600">No likely duplicates found.</p>

@@ -31,6 +31,7 @@ export function ReadyApp() {
     pendingAnalysis,
     selectedCandidate,
     decisions,
+    history,
     crm,
     exportOptions,
     rulePack,
@@ -47,6 +48,8 @@ export function ReadyApp() {
     decide,
     chooseField,
     mergeAllExact,
+    decideMany,
+    undo,
     setCrm,
     setExportOption,
     setRulePack,
@@ -139,6 +142,7 @@ export function ReadyApp() {
           <DuplicateReview
             parsed={result.parsed}
             candidates={result.duplicates}
+            roles={result.roles}
             skippedLargeBlocks={result.skippedLargeBlocks}
             selected={selectedCandidate}
             onSelect={selectCandidate}
@@ -146,6 +150,9 @@ export function ReadyApp() {
             onDecide={decide}
             onChooseField={chooseField}
             onMergeAllExact={mergeAllExact}
+            onDecideMany={decideMany}
+            onUndo={undo}
+            canUndo={history.length > 0}
           />
           <ExportPanel
             result={result}

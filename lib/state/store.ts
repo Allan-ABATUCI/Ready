@@ -10,6 +10,9 @@ import type { Crm, RulePack, RulePackManifest, RulePackStatus } from "@/lib/rule
 
 export type Status = "idle" | "processing" | "ready" | "error";
 
+/** Undo steps kept. Each is a full `decisions` snapshot, so this bounds memory on large files. */
+export const HISTORY_LIMIT = 50;
+
 /**
  * In-memory app state. Not persisted (no `persist` middleware) — file data must
  * not land in localStorage/IndexedDB or anything that might sync off-device.
@@ -28,6 +31,8 @@ export interface ReadyState {
   selectedCandidate: number;
   /** Merge decisions keyed by `pairKey` ("a:b"). */
   decisions: Decisions;
+  /** Earlier `decisions`, oldest first, for undo. One entry per user action, bulk ones included. */
+  history: Decisions[];
   /** Destination CRM picked by the user; export is disabled until set. */
   crm: Crm | null;
   exportOptions: ExportOptions;
@@ -61,6 +66,10 @@ export interface ReadyState {
   chooseField: (index: number, col: number, side: FieldSide) => void;
   /** Mark every undecided exact match (see `isExactMatch`) as "merge". */
   mergeAllExact: () => void;
+  /** Set the action for every candidate in `indexes`, keeping field picks. One undo step. */
+  decideMany: (indexes: number[], action: PairAction) => void;
+  /** Restore the decisions from before the last change, if any. */
+  undo: () => void;
   setCrm: (crm: Crm) => void;
   setExportOption: SetExportOption;
   /** Store the result of loading `crm`'s pack; ignored if the user has since picked another CRM. */
@@ -77,6 +86,7 @@ const initial = {
   pendingAnalysis: null as ReadyState["pendingAnalysis"],
   selectedCandidate: 0,
   decisions: {} as Decisions,
+  history: [] as Decisions[],
   crm: null as Crm | null,
   exportOptions: DEFAULT_EXPORT_OPTIONS,
   rulePack: null as RulePack | null,
@@ -89,6 +99,16 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
     return c ? pairKey(c) : null;
   };
 
+  /** Replace the decisions, recording the old ones for undo. */
+  const commitDecisions = (next: Decisions) => {
+    const { decisions, history } = get();
+    set({ decisions: next, history: [...history, decisions].slice(-HISTORY_LIMIT) });
+  };
+
+  // Undo can't restore decisions about pairs that no longer exist, so every
+  // place that clears decisions because pairs changed also clears the history.
+  const cleared = { decisions: {}, history: [], selectedCandidate: 0 };
+
   const startAnalysis = (result: ProcessResult, inputs: AnalysisInputs, clearsDecisions: boolean) => {
     // If a role change is still being analyzed, this run replaces it, so it must
     // also clear decisions the user made against the old pairs in the meantime.
@@ -96,7 +116,7 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
     set({
       result: { ...result, ...inputs },
       pendingAnalysis: { inputs, clearsDecisions: clears },
-      ...(clearsDecisions && { decisions: {}, selectedCandidate: 0 }),
+      ...(clearsDecisions && cleared),
     });
     return inputs;
   };
@@ -109,8 +129,8 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
     setStage: (stage) => {
       if (get().status === "processing" || get().pendingAnalysis) set({ stage });
     },
-    finishProcessing: (result) => set({ status: "ready", stage: null, result, selectedCandidate: 0, decisions: {} }),
-    failProcessing: () => set({ status: "error", stage: null, result: null, pendingAnalysis: null, decisions: {} }),
+    finishProcessing: (result) => set({ status: "ready", stage: null, result, ...cleared }),
+    failProcessing: () => set({ status: "error", stage: null, result: null, pendingAnalysis: null, ...cleared }),
     setRole: (role, col) => {
       const { result } = get();
       if (!result) return null;
@@ -130,7 +150,7 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
         result: { ...result, ...analysis },
         pendingAnalysis: null,
         stage: null,
-        ...(pendingAnalysis.clearsDecisions && { decisions: {}, selectedCandidate: 0 }),
+        ...(pendingAnalysis.clearsDecisions && cleared),
       });
     },
     selectCandidate: (selectedCandidate) => set({ selectedCandidate }),
@@ -138,24 +158,41 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
       const key = keyOf(index);
       if (!key) return;
       const { decisions } = get();
-      set({ decisions: { ...decisions, [key]: { action, fields: decisions[key]?.fields ?? {} } } });
+      if (decisions[key]?.action === action) return; // no-op: don't add an undo step
+      commitDecisions({ ...decisions, [key]: { action, fields: decisions[key]?.fields ?? {} } });
     },
     chooseField: (index, col, side) => {
       const key = keyOf(index);
       if (!key) return;
       const { decisions } = get();
       const fields = { ...decisions[key]?.fields, [col]: side };
-      set({ decisions: { ...decisions, [key]: { action: "merge", fields } } });
+      commitDecisions({ ...decisions, [key]: { action: "merge", fields } });
     },
     mergeAllExact: () => {
       const { result, decisions } = get();
       if (!result) return;
+      const exact = result.duplicates.flatMap((c, i) => (isExactMatch(c) && !decisions[pairKey(c)] ? [i] : []));
+      get().decideMany(exact, "merge");
+    },
+    decideMany: (indexes, action) => {
+      const { result, decisions } = get();
+      if (!result) return;
       const next = { ...decisions };
-      for (const c of result.duplicates) {
+      let changed = false;
+      for (const i of indexes) {
+        const c = result.duplicates[i];
+        if (!c) continue;
         const key = pairKey(c);
-        if (isExactMatch(c) && !next[key]) next[key] = { action: "merge", fields: {} };
+        if (next[key]?.action === action) continue;
+        next[key] = { action, fields: next[key]?.fields ?? {} };
+        changed = true;
       }
-      set({ decisions: next });
+      if (changed) commitDecisions(next);
+    },
+    undo: () => {
+      const { history } = get();
+      const previous = history.at(-1);
+      if (previous) set({ decisions: previous, history: history.slice(0, -1) });
     },
     setCrm: (crm) => {
       if (get().crm !== crm) set({ crm, rulePack: null, rulePackStatus: "loading" });

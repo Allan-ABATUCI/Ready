@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
+import { syntheticContacts } from "../tests/support/synthetic";
 
 test("profiles a file and shows duplicates side by side", async ({ page }) => {
   await page.goto("/");
@@ -122,4 +123,28 @@ test("detects day-first dates and exports them as YYYY-MM-DD", async ({ page }) 
   const file = readFileSync((await (await download).path())!, "utf8");
   for (const iso of ["2024-12-31", "2024-03-05", "2023-02-01", "2024-02-29"]) expect(file).toContain(iso);
   expect(file).not.toContain("31/12/2024");
+});
+
+test("reviews many pairs: filter by email, merge all shown, undo", async ({ page }) => {
+  await page.goto("/");
+  await page.getByTestId("file-input").setInputFiles({
+    name: "synthetic.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(syntheticContacts({ rows: 600, seed: 11, dupRate: 0.3 })),
+  });
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+  await expect(page.getByTestId("pair-page")).toContainText(/Page 1 of [2-9]/);
+
+  await page.getByLabel("Matched on").selectOption("Email");
+  const mergeShown = page.getByRole("button", { name: /Merge all shown/ });
+  const shown = Number(/\((\d+)\)/.exec((await mergeShown.textContent())!)![1]);
+  expect(shown).toBeGreaterThan(0);
+
+  page.once("dialog", (d) => void d.accept());
+  await mergeShown.click();
+  await expect(page.getByTestId("review-progress")).toContainText(`Reviewed ${shown} of`);
+  await expect(page.getByTestId("review-progress")).toContainText(`${shown} to merge`);
+
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByTestId("review-progress")).toContainText("Reviewed 0 of");
 });

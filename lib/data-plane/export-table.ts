@@ -2,6 +2,7 @@ import "client-only";
 import type { Crm } from "@/lib/rule-packs/types";
 import { planColumns, projectRow } from "./crm-mapping";
 import type { MergeResult } from "./merge";
+import { toE164, type CountryCode } from "./phone";
 import type { CsvRow, ProcessResult } from "./types";
 import { normalizeEmail } from "./validate";
 
@@ -12,9 +13,30 @@ export interface ExportOptions {
   lowercaseEmails: boolean;
   /** Apply the capitalization suggestions from the issues pass. */
   fixCase: boolean;
+  /** Rewrite the phone column in E.164 ("+33612345678"); values that can't be converted are kept. */
+  normalizePhones: boolean;
+  /**
+   * Country for phone numbers written without "+" or "00". Null by default, and
+   * deliberately never inferred from navigator.language: the export must depend
+   * only on the file, the rule pack and the user's explicit choices (CLAUDE.md).
+   */
+  defaultCountry: CountryCode | null;
 }
 
-export const DEFAULT_EXPORT_OPTIONS: ExportOptions = { trim: true, lowercaseEmails: true, fixCase: true };
+/** The on/off options, which the UI shows as checkboxes. */
+export type ExportToggle = {
+  [K in keyof ExportOptions]: ExportOptions[K] extends boolean ? K : never;
+}[keyof ExportOptions];
+
+export type SetExportOption = <K extends keyof ExportOptions>(key: K, value: ExportOptions[K]) => void;
+
+export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
+  trim: true,
+  lowercaseEmails: true,
+  fixCase: true,
+  normalizePhones: true,
+  defaultCountry: null,
+};
 
 export interface ExportTable {
   headers: string[];
@@ -41,6 +63,7 @@ export function buildExportTable(
     }
   }
   const emailCol = roles.email;
+  const phoneCol = options.normalizePhones ? roles.phone : undefined;
 
   const clean = (row: CsvRow): CsvRow =>
     row.map((value, col) => {
@@ -49,6 +72,7 @@ export function buildExportTable(
       if (fix !== undefined) v = fix;
       if (options.trim) v = v.trim();
       if (options.lowercaseEmails && col === emailCol) v = options.trim ? normalizeEmail(v) : v.toLowerCase();
+      if (col === phoneCol) v = toE164(v, options.defaultCountry) ?? v;
       return v;
     });
 

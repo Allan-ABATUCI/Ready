@@ -71,6 +71,50 @@ describe("ExportPanel", () => {
   });
 });
 
+describe("ExportPanel phone options", () => {
+  const phones = processCsv("Full Name,Phone\nAvery Example,06 12 34 56 78\nBo Sample,+44 20 7946 0958\n");
+
+  function PhoneHarness({ download }: { download: (filename: string, headers: string[], rows: string[][]) => void }) {
+    const [options, setOptions] = useState<ExportOptions>(DEFAULT_EXPORT_OPTIONS);
+    return (
+      <ExportPanel
+        result={phones}
+        decisions={{}}
+        crm="pipedrive"
+        options={options}
+        onCrm={() => {}}
+        onOption={(k, v) => setOptions((o) => ({ ...o, [k]: v }))}
+        download={download}
+      />
+    );
+  }
+
+  const downloaded = async (download: ReturnType<typeof vi.fn>) => {
+    await userEvent.click(screen.getByRole("button", { name: "Download CSV" }));
+    return (download.mock.lastCall![2] as string[][]).map((r) => r[1]);
+  };
+
+  it("normalizes by default, with no default country", async () => {
+    const download = vi.fn();
+    render(<PhoneHarness download={download} />);
+    expect(screen.getByLabelText(/International phone format/)).toBeChecked();
+    expect(screen.getByLabelText("Default country for numbers without +")).toHaveValue("");
+    expect(await downloaded(download)).toEqual(["06 12 34 56 78", "+442079460958"]);
+  });
+
+  it("uses the chosen default country, and disables the picker when normalization is off", async () => {
+    const download = vi.fn();
+    render(<PhoneHarness download={download} />);
+    const country = screen.getByLabelText("Default country for numbers without +");
+    await userEvent.selectOptions(country, "France (+33)");
+    expect(await downloaded(download)).toEqual(["+33612345678", "+442079460958"]);
+
+    await userEvent.click(screen.getByLabelText(/International phone format/));
+    expect(country).toBeDisabled();
+    expect(await downloaded(download)).toEqual(["06 12 34 56 78", "+44 20 7946 0958"]);
+  });
+});
+
 describe("ExportPanel rule-pack checks", () => {
   const base = {
     result: processCsv("Full Name,Email\nAvery Example,avery@example.test\nBo,not-an-email\n"),

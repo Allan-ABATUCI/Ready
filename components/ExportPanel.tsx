@@ -3,8 +3,14 @@
 import { useMemo } from "react";
 import { CRM_LABELS } from "@/lib/data-plane/crm-mapping";
 import { downloadCsv } from "@/lib/data-plane/export";
-import { buildExportTable, type ExportOptions } from "@/lib/data-plane/export-table";
+import {
+  buildExportTable,
+  type ExportOptions,
+  type ExportToggle,
+  type SetExportOption,
+} from "@/lib/data-plane/export-table";
 import { applyDecisions, type Decisions } from "@/lib/data-plane/merge";
+import { PHONE_COUNTRIES, type CountryCode } from "@/lib/data-plane/phone";
 import { checkRequirements, type RequirementCode } from "@/lib/data-plane/requirements";
 import type { ProcessResult } from "@/lib/data-plane/types";
 import { groupBy } from "@/lib/group";
@@ -16,10 +22,11 @@ const REQUIREMENT_LABELS: Record<RequirementCode, string> = {
   invalid_format: "Wrong format",
 };
 
-const OPTION_LABELS: Record<keyof ExportOptions, string> = {
+const OPTION_LABELS: Record<ExportToggle, string> = {
   trim: "Trim extra spaces",
   lowercaseEmails: "Lower-case email addresses",
   fixCase: "Fix capitalization",
+  normalizePhones: "International phone format (+33…)",
 };
 
 export interface ExportPanelProps {
@@ -28,7 +35,7 @@ export interface ExportPanelProps {
   crm: Crm | null;
   options: ExportOptions;
   onCrm: (crm: Crm) => void;
-  onOption: (key: keyof ExportOptions, value: boolean) => void;
+  onOption: SetExportOption;
   /** Verified pack for `crm`, if loaded. */
   rulePack?: RulePack | null;
   rulePackStatus?: RulePackStatus;
@@ -87,13 +94,29 @@ export function ExportPanel({
       <fieldset className="mt-3">
         <legend className="text-sm font-medium text-slate-700">Clean-up</legend>
         <div className="mt-1 flex flex-wrap gap-4 text-sm">
-          {(Object.keys(OPTION_LABELS) as (keyof ExportOptions)[]).map((k) => (
+          {(Object.keys(OPTION_LABELS) as ExportToggle[]).map((k) => (
             <label key={k} className="flex items-center gap-1">
               <input type="checkbox" checked={options[k]} onChange={(e) => onOption(k, e.target.checked)} />
               {OPTION_LABELS[k]}
             </label>
           ))}
         </div>
+        <label className="mt-2 flex items-center gap-2 text-sm">
+          Default country for numbers without +
+          <select
+            className="rounded border px-1 py-0.5 disabled:opacity-40"
+            value={options.defaultCountry ?? ""}
+            disabled={!options.normalizePhones}
+            onChange={(e) => onOption("defaultCountry", (e.target.value || null) as CountryCode | null)}
+          >
+            <option value="">None (leave them as they are)</option>
+            {PHONE_COUNTRIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </fieldset>
 
       <p className="mt-3 text-sm text-slate-600" data-testid="export-summary">

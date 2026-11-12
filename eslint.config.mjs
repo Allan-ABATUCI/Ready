@@ -49,6 +49,8 @@ export default defineConfig([
           paths: [
             { name: "papaparse", message: DATA_PLANE_MSG },
             { name: "fuzzball", message: DATA_PLANE_MSG },
+            { name: "libphonenumber-js", message: DATA_PLANE_MSG },
+            { name: "libphonenumber-js/min", message: DATA_PLANE_MSG },
           ],
           patterns: [
             { group: ["@/lib/data-plane", "@/lib/data-plane/*", "**/data-plane/**"], message: DATA_PLANE_MSG },

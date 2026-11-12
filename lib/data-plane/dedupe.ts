@@ -42,6 +42,8 @@ export function keyRows(parsed: ParsedCsv, cols: ColumnRoles): Keyed[] {
 
   return parsed.rows.map((row) => {
     const email = cell(row, cols.email);
+    // Digits only, so "+33 6…" and "06…" don't match. toE164 (phone.ts) could
+    // unify them, but only with a default country, which dedupe doesn't have yet.
     const phone = normalizePhone(cell(row, cols.phone));
     const name =
       cols.name !== undefined ? cell(row, cols.name) : joinName(cell(row, cols.firstName), cell(row, cols.lastName));

@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { isExactMatch, pairKey, type Decisions, type FieldSide, type PairAction } from "@/lib/data-plane/merge";
-import { DEFAULT_EXPORT_OPTIONS, type ExportOptions } from "@/lib/data-plane/export-table";
+import { DEFAULT_EXPORT_OPTIONS, type ExportOptions, type SetExportOption } from "@/lib/data-plane/export-table";
 import { assignRole, type ColumnRoles, type KeyColumn } from "@/lib/data-plane/columns";
 import type { Analysis, ProcessResult, Stage } from "@/lib/data-plane/types";
 import type { Crm, RulePack, RulePackManifest, RulePackStatus } from "@/lib/rule-packs/types";
@@ -52,7 +52,7 @@ export interface ReadyState {
   /** Mark every undecided exact match (see `isExactMatch`) as "merge". */
   mergeAllExact: () => void;
   setCrm: (crm: Crm) => void;
-  setExportOption: (key: keyof ExportOptions, value: boolean) => void;
+  setExportOption: SetExportOption;
   /** Store the result of loading `crm`'s pack; ignored if the user has since picked another CRM. */
   setRulePack: (crm: Crm, pack: RulePack | null) => void;
   setManifest: (manifest: RulePackManifest | null) => void;

@@ -3,8 +3,9 @@
 import { create } from "zustand";
 import { isExactMatch, pairKey, type Decisions, type FieldSide, type PairAction } from "@/lib/data-plane/merge";
 import { DEFAULT_EXPORT_OPTIONS, type ExportOptions, type SetExportOption } from "@/lib/data-plane/export-table";
-import { assignRole, type ColumnRoles, type KeyColumn } from "@/lib/data-plane/columns";
-import type { Analysis, ProcessResult, Stage } from "@/lib/data-plane/types";
+import { assignRole, type KeyColumn } from "@/lib/data-plane/columns";
+import type { DateOrder } from "@/lib/data-plane/dates";
+import type { Analysis, AnalysisInputs, ProcessResult, Stage } from "@/lib/data-plane/types";
 import type { Crm, RulePack, RulePackManifest, RulePackStatus } from "@/lib/rule-packs/types";
 
 export type Status = "idle" | "processing" | "ready" | "error";
@@ -19,8 +20,11 @@ export interface ReadyState {
   /** Current pipeline stage while processing or re-analyzing; null otherwise. */
   stage: Stage | null;
   result: ProcessResult | null;
-  /** True while duplicates and issues are recomputed after a role change. */
-  reanalyzing: boolean;
+  /**
+   * The re-analysis in progress after a role or date-order change, or null.
+   * `inputs` is compared by identity to drop results that a newer change made stale.
+   */
+  pendingAnalysis: { inputs: AnalysisInputs; clearsDecisions: boolean } | null;
   selectedCandidate: number;
   /** Merge decisions keyed by `pairKey` ("a:b"). */
   decisions: Decisions;
@@ -39,11 +43,17 @@ export interface ReadyState {
   /**
    * Give `role` to column `col` (null: to no column), moving it off any other
    * column. Clears merge decisions, since candidate pairs will change, and
-   * returns the new roles for the caller to re-analyze with (null if no file).
+   * returns the inputs for the caller to re-analyze with (null if no file).
    */
-  setRole: (role: KeyColumn, col: number | null) => ColumnRoles | null;
-  /** Store a re-analysis; ignored if the roles have changed again since it started. */
-  finishAnalysis: (roles: ColumnRoles, analysis: Analysis) => void;
+  setRole: (role: KeyColumn, col: number | null) => AnalysisInputs | null;
+  /**
+   * Read dates in `order` (null: "not sure"). Keeps merge decisions, since dates
+   * don't affect duplicate pairs. Returns the inputs to re-analyze with, or null
+   * if there is no file or nothing changed.
+   */
+  setDateOrder: (order: DateOrder | null) => AnalysisInputs | null;
+  /** Store a re-analysis; ignored if the inputs have changed again since it started. */
+  finishAnalysis: (inputs: AnalysisInputs, analysis: Analysis) => void;
   selectCandidate: (index: number) => void;
   /** Set the action for candidate `index`, keeping any field picks. */
   decide: (index: number, action: PairAction) => void;
@@ -64,7 +74,7 @@ const initial = {
   fileName: null,
   stage: null as Stage | null,
   result: null,
-  reanalyzing: false,
+  pendingAnalysis: null as ReadyState["pendingAnalysis"],
   selectedCandidate: 0,
   decisions: {} as Decisions,
   crm: null as Crm | null,
@@ -79,33 +89,48 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
     return c ? pairKey(c) : null;
   };
 
+  const startAnalysis = (result: ProcessResult, inputs: AnalysisInputs, clearsDecisions: boolean) => {
+    // If a role change is still being analyzed, this run replaces it, so it must
+    // also clear decisions the user made against the old pairs in the meantime.
+    const clears = clearsDecisions || (get().pendingAnalysis?.clearsDecisions ?? false);
+    set({
+      result: { ...result, ...inputs },
+      pendingAnalysis: { inputs, clearsDecisions: clears },
+      ...(clearsDecisions && { decisions: {}, selectedCandidate: 0 }),
+    });
+    return inputs;
+  };
+
   return {
     ...initial,
     manifest: null,
     startProcessing: (fileName) => set({ ...initial, status: "processing", fileName }),
     // A late progress message must not flip a finished or failed run back to a stage.
     setStage: (stage) => {
-      if (get().status === "processing" || get().reanalyzing) set({ stage });
+      if (get().status === "processing" || get().pendingAnalysis) set({ stage });
     },
     finishProcessing: (result) => set({ status: "ready", stage: null, result, selectedCandidate: 0, decisions: {} }),
-    failProcessing: () => set({ status: "error", stage: null, result: null, reanalyzing: false, decisions: {} }),
+    failProcessing: () => set({ status: "error", stage: null, result: null, pendingAnalysis: null, decisions: {} }),
     setRole: (role, col) => {
       const { result } = get();
       if (!result) return null;
-      const roles = assignRole(result.roles, role, col);
-      set({ result: { ...result, roles }, reanalyzing: true, decisions: {}, selectedCandidate: 0 });
-      return roles;
+      return startAnalysis(result, { roles: assignRole(result.roles, role, col), dateOrder: result.dateOrder }, true);
     },
-    finishAnalysis: (roles, analysis) => {
+    setDateOrder: (dateOrder) => {
       const { result } = get();
-      // Identity check: a newer setRole replaced `result.roles`, so this analysis is stale.
-      if (!result || result.roles !== roles) return;
+      if (!result || result.dateOrder === dateOrder) return null;
+      // Duplicate matching never looks at dates, so the pairs and decisions stay valid.
+      return startAnalysis(result, { roles: result.roles, dateOrder }, false);
+    },
+    finishAnalysis: (inputs, analysis) => {
+      const { result, pendingAnalysis } = get();
+      // Identity check: a newer change replaced the pending inputs, so this analysis is stale.
+      if (!result || pendingAnalysis?.inputs !== inputs) return;
       set({
         result: { ...result, ...analysis },
-        reanalyzing: false,
+        pendingAnalysis: null,
         stage: null,
-        decisions: {},
-        selectedCandidate: 0,
+        ...(pendingAnalysis.clearsDecisions && { decisions: {}, selectedCandidate: 0 }),
       });
     },
     selectCandidate: (selectedCandidate) => set({ selectedCandidate }),

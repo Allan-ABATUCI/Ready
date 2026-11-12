@@ -5,18 +5,13 @@ import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_EXPORT_OPTIONS, type ExportOptions } from "@/lib/data-plane/export-table";
 import type { Decisions } from "@/lib/data-plane/merge";
 import { processCsv } from "@/lib/data-plane/process";
+import type { ProcessResult } from "@/lib/data-plane/types";
 import type { Crm } from "@/lib/rule-packs/types";
 import { ExportPanel } from "./ExportPanel";
 
 const result = processCsv("Full Name,Email\nAvery Example,AVERY@example.test\navery example,avery@example.test\n");
 
-function Harness({
-  download,
-  decisions = {},
-}: {
-  download: (filename: string, headers: string[], rows: string[][]) => void;
-  decisions?: Decisions;
-}) {
+function Harness({ download, decisions = {} }: { download: Download; decisions?: Decisions }) {
   const [crm, setCrm] = useState<Crm | null>(null);
   const [options, setOptions] = useState<ExportOptions>(DEFAULT_EXPORT_OPTIONS);
   return (
@@ -71,32 +66,36 @@ describe("ExportPanel", () => {
   });
 });
 
+type Download = (filename: string, headers: string[], rows: string[][]) => void;
+
+/** Pipedrive export of `result` with live clean-up options. */
+function OptionsHarness({ result, download }: { result: ProcessResult; download: Download }) {
+  const [options, setOptions] = useState<ExportOptions>(DEFAULT_EXPORT_OPTIONS);
+  return (
+    <ExportPanel
+      result={result}
+      decisions={{}}
+      crm="pipedrive"
+      options={options}
+      onCrm={() => {}}
+      onOption={(k, v) => setOptions((o) => ({ ...o, [k]: v }))}
+      download={download}
+    />
+  );
+}
+
+/** Download, and return the second exported column. */
+const downloaded = async (download: ReturnType<typeof vi.fn>) => {
+  await userEvent.click(screen.getByRole("button", { name: "Download CSV" }));
+  return (download.mock.lastCall![2] as string[][]).map((r) => r[1]);
+};
+
 describe("ExportPanel phone options", () => {
   const phones = processCsv("Full Name,Phone\nAvery Example,06 12 34 56 78\nBo Sample,+44 20 7946 0958\n");
 
-  function PhoneHarness({ download }: { download: (filename: string, headers: string[], rows: string[][]) => void }) {
-    const [options, setOptions] = useState<ExportOptions>(DEFAULT_EXPORT_OPTIONS);
-    return (
-      <ExportPanel
-        result={phones}
-        decisions={{}}
-        crm="pipedrive"
-        options={options}
-        onCrm={() => {}}
-        onOption={(k, v) => setOptions((o) => ({ ...o, [k]: v }))}
-        download={download}
-      />
-    );
-  }
-
-  const downloaded = async (download: ReturnType<typeof vi.fn>) => {
-    await userEvent.click(screen.getByRole("button", { name: "Download CSV" }));
-    return (download.mock.lastCall![2] as string[][]).map((r) => r[1]);
-  };
-
   it("normalizes by default, with no default country", async () => {
     const download = vi.fn();
-    render(<PhoneHarness download={download} />);
+    render(<OptionsHarness result={phones} download={download} />);
     expect(screen.getByLabelText(/International phone format/)).toBeChecked();
     expect(screen.getByLabelText("Default country for numbers without +")).toHaveValue("");
     expect(await downloaded(download)).toEqual(["06 12 34 56 78", "+442079460958"]);
@@ -104,7 +103,7 @@ describe("ExportPanel phone options", () => {
 
   it("uses the chosen default country, and disables the picker when normalization is off", async () => {
     const download = vi.fn();
-    render(<PhoneHarness download={download} />);
+    render(<OptionsHarness result={phones} download={download} />);
     const country = screen.getByLabelText("Default country for numbers without +");
     await userEvent.selectOptions(country, "France (+33)");
     expect(await downloaded(download)).toEqual(["+33612345678", "+442079460958"]);
@@ -112,6 +111,17 @@ describe("ExportPanel phone options", () => {
     await userEvent.click(screen.getByLabelText(/International phone format/));
     expect(country).toBeDisabled();
     expect(await downloaded(download)).toEqual(["06 12 34 56 78", "+44 20 7946 0958"]);
+  });
+});
+
+describe("ExportPanel date option", () => {
+  it("writes ISO dates by default and can be switched off", async () => {
+    const download = vi.fn();
+    render(<OptionsHarness result={processCsv("Name;Signup\nA;31/12/2024\nB;01/02/2024\n")} download={download} />);
+    expect(screen.getByLabelText("Dates as YYYY-MM-DD")).toBeChecked();
+    expect(await downloaded(download)).toEqual(["2024-12-31", "2024-02-01"]);
+    await userEvent.click(screen.getByLabelText("Dates as YYYY-MM-DD"));
+    expect(await downloaded(download)).toEqual(["31/12/2024", "01/02/2024"]);
   });
 });
 

@@ -3,9 +3,10 @@
 import { useEffect } from "react";
 import { fetchRulePackManifest } from "@/lib/control-plane-client/rule-packs";
 import type { KeyColumn } from "@/lib/data-plane/columns";
+import type { DateOrder } from "@/lib/data-plane/dates";
 import { analyzeInWorker, processFileInWorker } from "@/lib/data-plane/run";
 import { logEvent, toErrorCode } from "@/lib/diagnostics";
-import type { Stage } from "@/lib/data-plane/types";
+import type { AnalysisInputs, Stage } from "@/lib/data-plane/types";
 import { loadVerifiedRulePack } from "@/lib/rule-packs/load";
 import { useReadyStore } from "@/lib/state/store";
 import { DuplicateReview } from "./DuplicateReview";
@@ -27,7 +28,7 @@ export function ReadyApp() {
     status,
     stage,
     result,
-    reanalyzing,
+    pendingAnalysis,
     selectedCandidate,
     decisions,
     crm,
@@ -40,6 +41,7 @@ export function ReadyApp() {
     finishProcessing,
     failProcessing,
     setRole,
+    setDateOrder,
     finishAnalysis,
     selectCandidate,
     decide,
@@ -51,6 +53,7 @@ export function ReadyApp() {
     setManifest,
     reset,
   } = useReadyStore();
+  const reanalyzing = pendingAnalysis !== null;
 
   useEffect(() => {
     void fetchRulePackManifest().then((manifest) => {
@@ -74,6 +77,18 @@ export function ReadyApp() {
     }
   };
 
+  const reanalyze = async (inputs: AnalysisInputs | null) => {
+    if (!inputs || !result) return;
+    try {
+      finishAnalysis(inputs, await analyzeInWorker(result.parsed, result.profile, inputs, setStage));
+    } catch (e) {
+      // The analysis is pure code over data that already parsed, so this is not
+      // expected; fail visibly rather than show results for the old inputs.
+      logEvent({ kind: "error", code: toErrorCode(e) });
+      failProcessing();
+    }
+  };
+
   const onRole = async (role: KeyColumn, col: number | null) => {
     const hasDecisions = Object.keys(decisions).length > 0;
     if (
@@ -82,17 +97,10 @@ export function ReadyApp() {
     ) {
       return;
     }
-    const roles = setRole(role, col);
-    if (!roles || !result) return;
-    try {
-      finishAnalysis(roles, await analyzeInWorker(result.parsed, result.profile, roles, setStage));
-    } catch (e) {
-      // The analysis is pure code over data that already parsed, so this is not
-      // expected; fail visibly rather than show results for the old roles.
-      logEvent({ kind: "error", code: toErrorCode(e) });
-      failProcessing();
-    }
+    await reanalyze(setRole(role, col));
   };
+
+  const onDateOrder = (order: DateOrder | null) => reanalyze(setDateOrder(order));
 
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-10">
@@ -117,9 +125,17 @@ export function ReadyApp() {
             encoding={result.parsed.encoding}
             roles={result.roles}
             onRole={onRole}
+            dateOrder={result.dateOrder}
+            onDateOrder={onDateOrder}
             busy={reanalyzing}
           />
-          <IssuesSummary headers={result.parsed.headers} rows={result.parsed.rows} issues={result.cellIssues} />
+          <IssuesSummary
+            headers={result.parsed.headers}
+            rows={result.parsed.rows}
+            issues={result.cellIssues}
+            onDateOrder={onDateOrder}
+            busy={reanalyzing}
+          />
           <DuplicateReview
             parsed={result.parsed}
             candidates={result.duplicates}

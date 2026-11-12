@@ -1,10 +1,9 @@
-import type { ColumnRoles } from "../columns";
-import type { Analysis, ColumnProfile, ParsedCsv, ProcessResult, Stage } from "../types";
+import type { Analysis, AnalysisInputs, ColumnProfile, ParsedCsv, ProcessResult, Stage } from "../types";
 
 export type WorkerRequest =
   | { type: "process"; file: File }
-  /** Re-run the role-dependent stages after the user reassigns a column; the file isn't read again. */
-  | { type: "analyze"; parsed: ParsedCsv; profile: ColumnProfile[]; roles: ColumnRoles };
+  /** Re-run the input-dependent stages after the user changes a role or the date order; the file isn't read again. */
+  | { type: "analyze"; parsed: ParsedCsv; profile: ColumnProfile[]; inputs: AnalysisInputs };
 
 /** Messages carry stage names and codes only, never counts or values from the file. */
 export type WorkerResponse =

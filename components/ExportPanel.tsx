@@ -27,6 +27,7 @@ const OPTION_LABELS: Record<ExportToggle, string> = {
   lowercaseEmails: "Lower-case email addresses",
   fixCase: "Fix capitalization",
   normalizePhones: "International phone format (+33…)",
+  isoDates: "Dates as YYYY-MM-DD",
 };
 
 export interface ExportPanelProps {

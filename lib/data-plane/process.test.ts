@@ -49,7 +49,7 @@ describe("processCsv", () => {
 
     const roles = { name: 0, phone: 1, company: 2 };
     const stages: string[] = [];
-    const again = analyze(first.parsed, first.profile, roles, (s) => stages.push(s));
+    const again = analyze(first.parsed, first.profile, { roles, dateOrder: null }, (s) => stages.push(s));
     expect(stages).toEqual(["matching", "checking"]);
     const full = processCsv(text, { roles });
     expect(again).toEqual({
@@ -60,5 +60,35 @@ describe("processCsv", () => {
     // Same phone once the column is a phone; ALL CAPS flagged once the column is a company.
     expect(again.duplicates).toEqual([{ a: 0, b: 1, score: 100, matchedOn: ["phone"] }]);
     expect(again.cellIssues).toEqual([{ row: 0, col: 2, code: "inconsistent_case", suggestion: "Acme Ltd" }]);
+  });
+
+  describe("date order", () => {
+    const text = "Name;Signup\nA;01/02/2024\nB;31/12/2024\n";
+
+    it("is detected from the date columns and returned", () => {
+      const r = processCsv(text);
+      expect(r.dateOrder).toBe("dmy");
+      expect(r.cellIssues).toEqual([]);
+    });
+
+    it("is null when the values don't settle it, which flags ambiguous dates", () => {
+      const r = processCsv("Name,Signup\nA,01/02/2024\nB,05/05/2024\n");
+      expect(r.dateOrder).toBeNull();
+      expect(r.cellIssues).toEqual([{ row: 0, col: 1, code: "ambiguous_date" }]);
+    });
+
+    it("can be set explicitly, and analyze() with it matches a full run", () => {
+      const chosen = processCsv(text, { dateOrder: "mdy" });
+      expect(chosen.dateOrder).toBe("mdy");
+      expect(chosen.cellIssues).toEqual([{ row: 1, col: 1, code: "invalid_date" }]);
+      const first = processCsv(text);
+      const again = analyze(first.parsed, first.profile, { roles: first.roles, dateOrder: "mdy" });
+      expect(again.cellIssues).toEqual(chosen.cellIssues);
+      expect(again.duplicates).toEqual(first.duplicates); // dates never affect matching
+    });
+
+    it("ignores date-looking values outside date columns", () => {
+      expect(processCsv("Name,Ref\nA,31/12/2024\nB,x\nC,y\n").dateOrder).toBeNull();
+    });
   });
 });

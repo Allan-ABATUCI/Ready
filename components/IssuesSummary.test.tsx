@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { CellIssue } from "@/lib/data-plane/types";
 import { groupIssues, IssuesSummary } from "./IssuesSummary";
 
@@ -42,5 +42,30 @@ describe("IssuesSummary", () => {
       "invalid_email:1",
       "inconsistent_case:0",
     ]);
+  });
+
+  describe("ambiguous dates", () => {
+    const dateRows = [["01/02/2024"], ["03/04/2024"]];
+    const ambiguous: CellIssue[] = [
+      { row: 0, col: 0, code: "ambiguous_date" },
+      { row: 1, col: 0, code: "ambiguous_date" },
+    ];
+
+    it("lists them and asks how dates are written", async () => {
+      const onDateOrder = vi.fn();
+      render(<IssuesSummary headers={["Signup"]} rows={dateRows} issues={ambiguous} onDateOrder={onDateOrder} />);
+      expect(screen.getByText("Date could be day/month or month/day")).toBeInTheDocument();
+      const prompt = screen.getByTestId("ambiguous-dates");
+      const select = within(prompt).getByLabelText("Dates are written as");
+      expect(select).toHaveDisplayValue("Not sure");
+
+      await userEvent.selectOptions(select, "Day/Month/Year");
+      expect(onDateOrder).toHaveBeenCalledWith("dmy");
+    });
+
+    it("doesn't ask when there are none", () => {
+      render(<IssuesSummary headers={headers} rows={rows} issues={issues} onDateOrder={() => {}} />);
+      expect(screen.queryByTestId("ambiguous-dates")).not.toBeInTheDocument();
+    });
   });
 });

@@ -2,12 +2,13 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { detectKeyColumns } from "./columns";
 import { parseCsv } from "./csv";
+import type { DateOrder } from "./dates";
 import { findCellIssues, isSingleCase, titleCase } from "./issues";
 import { profileColumns } from "./profile";
 
-function issuesFor(text: string) {
+function issuesFor(text: string, dateOrder: DateOrder | null = null) {
   const parsed = parseCsv(text);
-  return findCellIssues(parsed, profileColumns(parsed), detectKeyColumns(parsed.headers));
+  return findCellIssues(parsed, profileColumns(parsed), detectKeyColumns(parsed.headers), dateOrder);
 }
 
 describe("titleCase", () => {
@@ -79,5 +80,34 @@ describe("findCellIssues", () => {
 
   it("returns nothing for an empty file", () => {
     expect(issuesFor("Name,Email\n")).toEqual([]);
+  });
+
+  describe("dates", () => {
+    // Tab-delimited, with a BOM, an empty cell and a quoted multiline note.
+    const dates =
+      '\uFEFFName\tSignup\tNotes\nA\t01/02/2024\t"x\ny"\nB\t31/12/2024\t\nC\t\t\nD\t31/04/2024\t\nE\t2024-12-31\t\n';
+
+    it("reads dates in the order the file settles, flagging impossible ones", () => {
+      expect(issuesFor(dates, "dmy")).toEqual([{ row: 3, col: 1, code: "invalid_date" }]);
+    });
+
+    it("flags values that read two ways when no order is set", () => {
+      expect(issuesFor(dates, null)).toEqual([
+        { row: 0, col: 1, code: "ambiguous_date" },
+        { row: 3, col: 1, code: "invalid_date" },
+      ]);
+    });
+
+    it("lets an explicit order override what the values suggest", () => {
+      // Month-first: 31/12/2024 is no longer a date; 01/02/2024 is January 2nd.
+      expect(issuesFor(dates, "mdy")).toEqual([
+        { row: 1, col: 1, code: "invalid_date" },
+        { row: 3, col: 1, code: "invalid_date" },
+      ]);
+    });
+
+    it("accepts only year-first dates under the year-first order", () => {
+      expect(issuesFor(dates, "ymd").map((i) => i.row)).toEqual([0, 1, 3]);
+    });
   });
 });

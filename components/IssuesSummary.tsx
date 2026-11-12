@@ -1,16 +1,25 @@
 "use client";
 
+import type { DateOrder } from "@/lib/data-plane/dates";
 import type { CellIssue, CellIssueCode } from "@/lib/data-plane/types";
 import { groupBy } from "@/lib/group";
+import { DateOrderSelect } from "./DateOrderSelect";
 
 const LABELS: Record<CellIssueCode, string> = {
   invalid_email: "Invalid email",
   invalid_phone: "Invalid phone number",
-  invalid_date: "Invalid date (expected YYYY-MM-DD)",
+  invalid_date: "Invalid date",
+  ambiguous_date: "Date could be day/month or month/day",
   inconsistent_case: "Inconsistent capitalization",
 };
 
-const CODE_ORDER: CellIssueCode[] = ["invalid_email", "invalid_phone", "invalid_date", "inconsistent_case"];
+const CODE_ORDER: CellIssueCode[] = [
+  "invalid_email",
+  "invalid_phone",
+  "invalid_date",
+  "ambiguous_date",
+  "inconsistent_case",
+];
 const MAX_ROWS_SHOWN = 20;
 
 interface Group {
@@ -34,16 +43,30 @@ export interface IssuesSummaryProps {
   headers: string[];
   rows: string[][];
   issues: CellIssue[];
+  /** Offered next to ambiguous dates, since choosing an order is how they're resolved. */
+  onDateOrder?: (order: DateOrder | null) => void;
+  busy?: boolean;
 }
 
-export function IssuesSummary({ headers, rows, issues }: IssuesSummaryProps) {
+export function IssuesSummary({ headers, rows, issues, onDateOrder, busy = false }: IssuesSummaryProps) {
   const groups = groupIssues(issues);
+  // Ambiguous dates only exist while the order is "not sure", so the picker starts there.
+  const hasAmbiguousDates = issues.some((i) => i.code === "ambiguous_date");
 
   return (
     <section aria-labelledby="issues-heading" className="rounded-xl bg-white p-6 shadow-sm" data-testid="issues">
       <h2 id="issues-heading" className="text-lg font-semibold text-slate-900">
         Issues <span className="font-normal text-slate-500">({issues.length})</span>
       </h2>
+
+      {onDateOrder && hasAmbiguousDates && (
+        <div className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900" data-testid="ambiguous-dates">
+          <p>Some dates could be read either way, like 03/04/2024 (3 April or 4 March). How are dates written?</p>
+          <div className="mt-2">
+            <DateOrderSelect value={null} onChange={onDateOrder} disabled={busy} />
+          </div>
+        </div>
+      )}
 
       {groups.length === 0 ? (
         <p className="mt-2 text-sm text-slate-600">No formatting issues found.</p>

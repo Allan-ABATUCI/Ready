@@ -1,13 +1,14 @@
 import "client-only";
 import type { FieldFormat } from "@/lib/rule-packs/types";
 import type { ColumnRoles, KeyColumn } from "./columns";
+import { readDate, type DateOrder } from "./dates";
 import type { CellIssue, CellIssueCode, ColumnProfile, ParsedCsv } from "./types";
 import { FORMAT_VALIDATORS } from "./validate";
 
-const FORMAT_ISSUE: Record<FieldFormat, CellIssueCode> = {
+/** Dates aren't here: they have two outcomes (invalid or ambiguous), see `formatIssue`. */
+const FORMAT_ISSUE: Record<Exclude<FieldFormat, "date">, CellIssueCode> = {
   email: "invalid_email",
   phone: "invalid_phone",
-  date: "invalid_date",
 };
 
 /** Columns holding proper nouns, where ALL CAPS / all lower is itself a problem. */
@@ -45,6 +46,7 @@ export function titleCase(v: string): string {
   return out;
 }
 
+/** Columns checked as emails, phones or dates: the email/phone roles, then columns that look like one. */
 function formatColumns(profile: ColumnProfile[], keys: ColumnRoles): Map<number, FieldFormat> {
   const out = new Map<number, FieldFormat>();
   if (keys.email !== undefined) out.set(keys.email, "email");
@@ -55,6 +57,20 @@ function formatColumns(profile: ColumnProfile[], keys: ColumnRoles): Map<number,
     }
   }
   return out;
+}
+
+/** The date columns, as issue detection sees them. Shared so detection and export agree. */
+export function dateColumns(profile: ColumnProfile[], keys: ColumnRoles): number[] {
+  return [...formatColumns(profile, keys)].filter(([, f]) => f === "date").map(([col]) => col);
+}
+
+/** The issue for one non-empty value of a `format` column, or null if it's fine. */
+function formatIssue(format: FieldFormat, value: string, dateOrder: DateOrder | null): CellIssueCode | null {
+  if (format === "date") {
+    const { kind } = readDate(value, dateOrder);
+    return kind === "date" ? null : kind === "ambiguous" ? "ambiguous_date" : "invalid_date";
+  }
+  return FORMAT_VALIDATORS[format](value) ? null : FORMAT_ISSUE[format];
 }
 
 interface Variant {
@@ -107,18 +123,24 @@ function caseIssues(parsed: ParsedCsv, col: number, properNoun: boolean): CellIs
 }
 
 /**
- * Per-cell problems: malformed emails / phones / dates and inconsistent
- * capitalization. Pure and deterministic; output sorted by row, column, code.
+ * Per-cell problems: malformed emails / phones / dates, ambiguous dates and
+ * inconsistent capitalization. Dates are read in `dateOrder` (see `readDate`).
+ * Pure and deterministic; output sorted by row, column, code.
  */
-export function findCellIssues(parsed: ParsedCsv, profile: ColumnProfile[], keys: ColumnRoles): CellIssue[] {
+export function findCellIssues(
+  parsed: ParsedCsv,
+  profile: ColumnProfile[],
+  keys: ColumnRoles,
+  dateOrder: DateOrder | null,
+): CellIssue[] {
   const issues: CellIssue[] = [];
   const formats = formatColumns(profile, keys);
 
   for (const [col, format] of formats) {
-    const valid = FORMAT_VALIDATORS[format];
     parsed.rows.forEach((row, r) => {
       const value = (row[col] ?? "").trim();
-      if (value !== "" && !valid(value)) issues.push({ row: r, col, code: FORMAT_ISSUE[format] });
+      const code = value === "" ? null : formatIssue(format, value, dateOrder);
+      if (code) issues.push({ row: r, col, code });
     });
   }
 

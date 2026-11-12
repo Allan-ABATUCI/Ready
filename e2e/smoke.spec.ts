@@ -107,3 +107,19 @@ test("warns before a role change clears merge decisions", async ({ page }) => {
   await expect(page.getByLabel("Use column 3 as")).toHaveValue("");
   await expect(page.getByTestId("review-progress")).toContainText("0 to merge");
 });
+
+test("detects day-first dates and exports them as YYYY-MM-DD", async ({ page }) => {
+  await page.goto("/");
+  await page.getByTestId("file-input").setInputFiles(path.join(__dirname, "..", "tests", "fixtures", "dates-eu.csv"));
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+  // 31/12/2024 can only be day-first, so the ambiguous 05.03.2024 and 01/02/2023 are too.
+  await expect(page.getByTestId("date-order").getByLabel("Dates are written as")).toHaveValue("dmy");
+  await expect(page.getByTestId("issues")).not.toContainText("Date could be");
+
+  await page.getByLabel("HubSpot").check();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download CSV" }).click();
+  const file = readFileSync((await (await download).path())!, "utf8");
+  for (const iso of ["2024-12-31", "2024-03-05", "2023-02-01", "2024-02-29"]) expect(file).toContain(iso);
+  expect(file).not.toContain("31/12/2024");
+});

@@ -25,6 +25,7 @@ describe("buildExportTable", () => {
       lowercaseEmails: false,
       fixCase: false,
       normalizePhones: false,
+      isoDates: false,
       defaultCountry: null,
     });
     expect(t.rows[1]).toEqual(["avery example", "AVERY@EXAMPLE.TEST", "", "Example Widgets Ltd."]);
@@ -86,5 +87,28 @@ describe("buildExportTable", () => {
   it("is deterministic", () => {
     const a = buildExportTable(result, noMerges, "hubspot", DEFAULT_EXPORT_OPTIONS);
     expect(buildExportTable(result, noMerges, "hubspot", DEFAULT_EXPORT_OPTIONS)).toEqual(a);
+  });
+
+  describe("ISO dates", () => {
+    const dates = processCsv("Name;Signup\nA;01/02/2024\nB;31/12/2024\nC;31/04/2024\nD;\nE;2024-03-05\n");
+    const unmerged = applyDecisions(dates.parsed, dates.duplicates, {});
+    const exported = (opts: Partial<ExportOptions>, dateOrder = dates.dateOrder) =>
+      buildExportTable({ ...dates, dateOrder }, unmerged, "pipedrive", { ...DEFAULT_EXPORT_OPTIONS, ...opts }).rows.map(
+        (r) => r[1],
+      );
+
+    it("writes dates as YYYY-MM-DD in the detected order by default, keeping invalid ones", () => {
+      expect(dates.dateOrder).toBe("dmy");
+      expect(exported({})).toEqual(["2024-02-01", "2024-12-31", "31/04/2024", "", "2024-03-05"]);
+    });
+
+    it("uses the chosen order, and keeps ambiguous values when there is none", () => {
+      expect(exported({}, "mdy")).toEqual(["2024-01-02", "31/12/2024", "31/04/2024", "", "2024-03-05"]);
+      expect(exported({}, null)).toEqual(["01/02/2024", "2024-12-31", "31/04/2024", "", "2024-03-05"]);
+    });
+
+    it("leaves dates alone when switched off", () => {
+      expect(exported({ isoDates: false })).toEqual(["01/02/2024", "31/12/2024", "31/04/2024", "", "2024-03-05"]);
+    });
   });
 });

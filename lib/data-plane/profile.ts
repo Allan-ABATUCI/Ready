@@ -1,12 +1,15 @@
 import "client-only";
 import type { ColumnProfile, ParsedCsv, ValuePattern } from "./types";
-import { isIsoDate, isValidEmail, isValidPhone } from "./validate";
+import { looksLikeDate } from "./dates";
+import { isValidEmail, isValidPhone } from "./validate";
 
 const NUMBER_RE = /^-?\d+([.,]\d+)?$/;
 
 function classify(value: string): Exclude<ValuePattern, "empty"> {
   if (isValidEmail(value)) return "email";
-  if (isIsoDate(value)) return "date";
+  // Before the phone check: "31/12/2024" is all digits and slashes, so it also
+  // passes isValidPhone and would otherwise make a date column look like phones.
+  if (looksLikeDate(value)) return "date";
   if (NUMBER_RE.test(value)) return "number";
   if (isValidPhone(value)) return "phone";
   return "text";

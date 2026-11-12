@@ -12,6 +12,7 @@ describe("useReadyStore", () => {
       parsed: { headers: [], rows: [], delimiter: ",", hadBom: false, encoding: "utf-8", issues: [] },
       profile: [],
       roles: {},
+      dateOrder: null,
       duplicates: [],
       skippedLargeBlocks: 0,
       cellIssues: [],
@@ -41,6 +42,7 @@ describe("useReadyStore", () => {
       parsed: { headers: ["Name", "Inbox"], rows: [], delimiter: ",", hadBom: false, encoding: "utf-8", issues: [] },
       profile: [],
       roles: { name: 0 },
+      dateOrder: null,
       duplicates: [{ a: 0, b: 1, score: 95, matchedOn: ["name"] }],
       skippedLargeBlocks: 0,
       cellIssues: [],
@@ -48,20 +50,80 @@ describe("useReadyStore", () => {
     s.decide(0, "merge");
 
     const first = s.setRole("email", 1)!;
-    expect(first).toEqual({ name: 0, email: 1 });
-    expect(useReadyStore.getState()).toMatchObject({ reanalyzing: true, decisions: {}, result: { roles: first } });
+    expect(first).toEqual({ roles: { name: 0, email: 1 }, dateOrder: null });
+    expect(useReadyStore.getState()).toMatchObject({
+      pendingAnalysis: { inputs: first },
+      decisions: {},
+      result: { roles: first.roles },
+    });
 
     const second = s.setRole("email", 0)!; // the user changes their mind before the first finishes
-    expect(second).toEqual({ email: 0 });
+    expect(second.roles).toEqual({ email: 0 });
 
     const analysis = { duplicates: [], skippedLargeBlocks: 0, cellIssues: [] };
     s.finishAnalysis(first, { ...analysis, skippedLargeBlocks: 99 });
-    expect(useReadyStore.getState()).toMatchObject({ reanalyzing: true, result: { skippedLargeBlocks: 0 } });
+    expect(useReadyStore.getState()).toMatchObject({
+      pendingAnalysis: { inputs: second },
+      result: { skippedLargeBlocks: 0 },
+    });
 
     s.finishAnalysis(second, analysis);
     expect(useReadyStore.getState()).toMatchObject({
-      reanalyzing: false,
+      pendingAnalysis: null,
       result: { roles: { email: 0 }, duplicates: [] },
+    });
+  });
+
+  describe("setDateOrder", () => {
+    const duplicates = [{ a: 0, b: 1, score: 95, matchedOn: ["name" as const] }];
+    const dateIssue = { row: 0, col: 1, code: "ambiguous_date" as const };
+    beforeEach(() =>
+      useReadyStore.getState().finishProcessing({
+        parsed: { headers: ["Name", "Signup"], rows: [], delimiter: ",", hadBom: false, encoding: "utf-8", issues: [] },
+        profile: [],
+        roles: { name: 0 },
+        dateOrder: null,
+        duplicates,
+        skippedLargeBlocks: 0,
+        cellIssues: [dateIssue],
+      }),
+    );
+
+    it("re-analyzes with the new order and keeps merge decisions", () => {
+      const s = useReadyStore.getState();
+      s.decide(0, "merge");
+      s.selectCandidate(0);
+
+      const inputs = s.setDateOrder("dmy")!;
+      expect(inputs).toEqual({ roles: { name: 0 }, dateOrder: "dmy" });
+      expect(useReadyStore.getState()).toMatchObject({
+        pendingAnalysis: { inputs, clearsDecisions: false },
+        result: { dateOrder: "dmy" },
+        decisions: { "0:1": { action: "merge" } },
+      });
+
+      s.finishAnalysis(inputs, { duplicates, skippedLargeBlocks: 0, cellIssues: [] });
+      expect(useReadyStore.getState()).toMatchObject({
+        pendingAnalysis: null,
+        result: { dateOrder: "dmy", cellIssues: [] },
+        decisions: { "0:1": { action: "merge" } },
+      });
+    });
+
+    it("does nothing when the order doesn't change or there is no file", () => {
+      expect(useReadyStore.getState().setDateOrder(null)).toBeNull();
+      useReadyStore.getState().reset();
+      expect(useReadyStore.getState().setDateOrder("dmy")).toBeNull();
+    });
+
+    it("still clears decisions when it replaces a pending role change", () => {
+      const s = useReadyStore.getState();
+      s.setRole("email", 1);
+      s.decide(0, "merge"); // made against the old pairs while the role change runs
+      const inputs = s.setDateOrder("mdy")!;
+      expect(inputs.roles).toEqual({ name: 0, email: 1 });
+      s.finishAnalysis(inputs, { duplicates, skippedLargeBlocks: 0, cellIssues: [] });
+      expect(useReadyStore.getState().decisions).toEqual({});
     });
   });
 
@@ -78,6 +140,7 @@ describe("useReadyStore", () => {
       },
       profile: [],
       roles: {},
+      dateOrder: null,
       duplicates: [
         { a: 0, b: 1, score: 100, matchedOn: ["email"] },
         { a: 2, b: 3, score: 92, matchedOn: ["name"] },

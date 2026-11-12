@@ -1,6 +1,8 @@
 import "client-only";
 import type { Crm } from "@/lib/rule-packs/types";
 import { planColumns, projectRow } from "./crm-mapping";
+import { readDate } from "./dates";
+import { dateColumns } from "./issues";
 import type { MergeResult } from "./merge";
 import { toE164, type CountryCode } from "./phone";
 import type { CsvRow, ProcessResult } from "./types";
@@ -15,6 +17,8 @@ export interface ExportOptions {
   fixCase: boolean;
   /** Rewrite the phone column in E.164 ("+33612345678"); values that can't be converted are kept. */
   normalizePhones: boolean;
+  /** Rewrite date columns as YYYY-MM-DD, read in the analysis' date order; ambiguous or invalid values are kept. */
+  isoDates: boolean;
   /**
    * Country for phone numbers written without "+" or "00". Null by default, and
    * deliberately never inferred from navigator.language: the export must depend
@@ -35,6 +39,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   lowercaseEmails: true,
   fixCase: true,
   normalizePhones: true,
+  isoDates: true,
   defaultCountry: null,
 };
 
@@ -45,7 +50,13 @@ export interface ExportTable {
 
 /** Pure: merged rows + cleaning options + CRM layout ⇒ the table to download. */
 export function buildExportTable(
-  { parsed, roles, cellIssues }: Pick<ProcessResult, "parsed" | "roles" | "cellIssues">,
+  {
+    parsed,
+    profile,
+    roles,
+    dateOrder,
+    cellIssues,
+  }: Pick<ProcessResult, "parsed" | "profile" | "roles" | "dateOrder" | "cellIssues">,
   merged: MergeResult,
   crm: Crm,
   options: ExportOptions,
@@ -64,6 +75,11 @@ export function buildExportTable(
   }
   const emailCol = roles.email;
   const phoneCol = options.normalizePhones ? roles.phone : undefined;
+  const dateCols = new Set(options.isoDates ? dateColumns(profile, roles) : []);
+  const toIsoDate = (v: string) => {
+    const reading = readDate(v, dateOrder);
+    return reading.kind === "date" ? reading.iso : v;
+  };
 
   const clean = (row: CsvRow): CsvRow =>
     row.map((value, col) => {
@@ -73,6 +89,7 @@ export function buildExportTable(
       if (options.trim) v = v.trim();
       if (options.lowercaseEmails && col === emailCol) v = options.trim ? normalizeEmail(v) : v.toLowerCase();
       if (col === phoneCol) v = toE164(v, options.defaultCountry) ?? v;
+      if (dateCols.has(col)) v = toIsoDate(v);
       return v;
     });
 

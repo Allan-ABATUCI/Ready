@@ -46,6 +46,7 @@ beforeEach(() => {
     parsed,
     profile: [],
     roles: {},
+    dateOrder: null,
     duplicates: candidates,
     skippedLargeBlocks: 0,
     cellIssues: [],

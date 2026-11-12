@@ -29,7 +29,7 @@ export async function handleRequest(req: WorkerRequest, post: (msg: WorkerRespon
       endStage();
       post({ type: "processed", result });
     } else {
-      const analysis = analyze(req.parsed, req.profile, req.roles, onStage);
+      const analysis = analyze(req.parsed, req.profile, req.inputs, onStage);
       endStage();
       post({ type: "analyzed", analysis });
     }

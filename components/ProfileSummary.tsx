@@ -1,7 +1,9 @@
 "use client";
 
 import { KEY_COLUMNS, type ColumnRoles, type KeyColumn } from "@/lib/data-plane/columns";
+import type { DateOrder } from "@/lib/data-plane/dates";
 import type { ColumnProfile, CsvEncoding } from "@/lib/data-plane/types";
+import { DateOrderSelect } from "./DateOrderSelect";
 
 const ROLE_LABELS: Record<KeyColumn, string> = {
   email: "Email",
@@ -20,6 +22,9 @@ export interface ProfileSummaryProps {
   roles?: ColumnRoles;
   /** `col` null clears the role. */
   onRole?: (role: KeyColumn, col: number | null) => void;
+  /** How dates are read. The picker is shown only with `onDateOrder` and a date column. */
+  dateOrder?: DateOrder | null;
+  onDateOrder?: (order: DateOrder | null) => void;
   /** Disables the pickers, e.g. while a previous change is being applied. */
   busy?: boolean;
 }
@@ -30,9 +35,12 @@ export function ProfileSummary({
   encoding = "utf-8",
   roles = {},
   onRole,
+  dateOrder = null,
+  onDateOrder,
   busy = false,
 }: ProfileSummaryProps) {
   const roleOf = (col: number) => KEY_COLUMNS.find((k) => roles[k] === col);
+  const hasDates = profile.some((c) => c.pattern === "date");
 
   return (
     <section aria-labelledby="profile-heading" className="rounded-xl bg-white p-6 shadow-sm">
@@ -43,6 +51,11 @@ export function ProfileSummary({
         <p className="mt-1 text-xs text-slate-500" data-testid="encoding-note">
           Read as Windows-1252 (the file wasn&apos;t UTF-8, as is common for files saved by Excel).
         </p>
+      )}
+      {onDateOrder && hasDates && (
+        <div className="mt-3" data-testid="date-order">
+          <DateOrderSelect value={dateOrder} onChange={onDateOrder} disabled={busy} />
+        </div>
       )}
       <table className="mt-4 w-full text-left text-sm">
         <thead className="text-slate-500">

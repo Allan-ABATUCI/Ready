@@ -48,4 +48,35 @@ describe("ProfileSummary", () => {
     render(<ProfileSummary profile={profile} rowCount={2} roles={{}} onRole={() => {}} busy />);
     for (const select of screen.getAllByRole("combobox")) expect(select).toBeDisabled();
   });
+
+  describe("date order", () => {
+    const withDates: ColumnProfile[] = [
+      ...profile,
+      { index: 2, header: "Signup", filled: 2, fillRate: 1, distinct: 2, pattern: "date" },
+    ];
+
+    it("is offered only when there is a date column", () => {
+      render(<ProfileSummary profile={profile} rowCount={2} onDateOrder={() => {}} />);
+      expect(screen.queryByLabelText("Dates are written as")).not.toBeInTheDocument();
+    });
+
+    it("is pre-filled with the detected order and reports changes", async () => {
+      const onDateOrder = vi.fn();
+      render(<ProfileSummary profile={withDates} rowCount={2} dateOrder="dmy" onDateOrder={onDateOrder} />);
+      const select = screen.getByLabelText("Dates are written as");
+      expect(select).toHaveDisplayValue("Day/Month/Year");
+
+      await userEvent.selectOptions(select, "Month/Day/Year");
+      expect(onDateOrder).toHaveBeenLastCalledWith("mdy");
+      await userEvent.selectOptions(select, "Not sure");
+      expect(onDateOrder).toHaveBeenLastCalledWith(null);
+    });
+
+    it('shows "Not sure" when the order is unknown, and is disabled while busy', () => {
+      render(<ProfileSummary profile={withDates} rowCount={2} dateOrder={null} onDateOrder={() => {}} busy />);
+      const select = screen.getByLabelText("Dates are written as");
+      expect(select).toHaveDisplayValue("Not sure");
+      expect(select).toBeDisabled();
+    });
+  });
 });

@@ -87,8 +87,11 @@ describe("diagnostics never contain file data", () => {
     const done = messages.at(-1)!;
     expect(done.type).toBe("processed");
     if (done.type !== "processed") return;
-    const { parsed, profile, roles } = done.result;
-    await handleRequest({ type: "analyze", parsed, profile, roles: { ...roles, company: 4 } }, (m) => messages.push(m));
+    const { parsed, profile, roles, dateOrder } = done.result;
+    await handleRequest(
+      { type: "analyze", parsed, profile, inputs: { roles: { ...roles, company: 4 }, dateOrder } },
+      (m) => messages.push(m),
+    );
     for (const m of messages) receive(m);
 
     logEvent({ kind: "error", code: toErrorCode(new Error(`bad row: ${dataLines[0]}`)) });

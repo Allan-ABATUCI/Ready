@@ -1,5 +1,6 @@
 import "client-only";
 import type { FieldFormat } from "@/lib/rule-packs/types";
+import { isCalendarDate } from "./dates";
 
 // Deliberately simple and local. No verification services — see CLAUDE.md.
 const EMAIL_RE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[^\s@.]{2,}$/u;
@@ -26,14 +27,13 @@ export function isValidPhone(value: string): boolean {
   return digits.length >= 7 && digits.length <= 15;
 }
 
-/** ISO 8601 calendar dates (YYYY-MM-DD) only for now; locale formats come with rule packs. */
+/**
+ * Strict ISO 8601 calendar dates (YYYY-MM-DD). Used for rule-pack checks on the
+ * export, which writes dates in this form; local formats are read by `dates.ts`.
+ */
 export function isIsoDate(value: string): boolean {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
-  if (!m) return false;
-  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  if (mo < 1 || mo > 12 || d < 1) return false;
-  const daysInMonth = new Date(Date.UTC(y, mo, 0)).getUTCDate();
-  return d <= daysInMonth;
+  const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value.trim());
+  return m !== null && isCalendarDate(Number(m[1]), Number(m[2]), Number(m[3]));
 }
 
 /** The single format → validator table shared by issue detection and rule-pack checks. */

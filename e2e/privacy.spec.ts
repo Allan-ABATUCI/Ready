@@ -5,11 +5,13 @@
  * Every request the browser makes (page, workers, beacons) is captured while a
  * fixture full of distinctive sentinel values is processed and exported. Each
  * URL, header and body is then searched for those sentinels in several
- * encodings. Any new outbound call must keep this test green.
+ * encodings, as are the values quoted in the downloaded change report. Any new
+ * outbound call must keep this test green.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Request } from "@playwright/test";
+import Papa from "papaparse";
 
 const FIXTURE = path.join(__dirname, "..", "tests", "fixtures", "privacy-sentinel.csv");
 // A distinctive file name, so we can assert it never leaves the browser either.
@@ -108,6 +110,24 @@ test("processing and exporting a file sends no file data over the network", asyn
   await page.getByRole("button", { name: "Download CSV" }).click();
   expect((await download).url()).toMatch(/^blob:/);
 
+  // The change report quotes file values (before / after), so it must stay a local blob too.
+  const reportDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download change report" }).click();
+  const report = await reportDownload;
+  expect(report.url()).toMatch(/^blob:/);
+  expect(report.suggestedFilename()).toBe("ready-salesforce-report.csv");
+  const reportRows = Papa.parse<string[]>(readFileSync((await report.path())!, "utf8")).data;
+  const detailStart = reportRows.findIndex((r) => r[0] === "Row in export");
+  // Every before / after value it quotes must stay off the network, like the file itself.
+  const reportNeedles = reportRows
+    .slice(detailStart + 1)
+    .flatMap((r) => [r[3] ?? "", r[4] ?? ""])
+    .filter((v) => v.length >= 4)
+    .flatMap(variants);
+  // Sanity: the report really holds file data (the phone conversion), so the check means something.
+  expect(reportRows.slice(detailStart + 1).some((r) => r[3] === "+44 20 7946 0958")).toBe(true);
+  expect(reportNeedles.length).toBeGreaterThan(0);
+
   await page.getByRole("button", { name: "Start over" }).click();
   await page.waitForLoadState("networkidle");
 
@@ -135,7 +155,9 @@ test("processing and exporting a file sends no file data over the network", asyn
 
   // No sentinel, in any encoding, in any URL, header or body.
   const leaks = requests.flatMap((r) =>
-    NEEDLES.filter((n) => r.haystack.includes(n)).map((n) => `${r.method} ${r.url} contains ${JSON.stringify(n)}`),
+    [...NEEDLES, ...reportNeedles]
+      .filter((n) => r.haystack.includes(n))
+      .map((n) => `${r.method} ${r.url} contains ${JSON.stringify(n)}`),
   );
   expect(leaks).toEqual([]);
 

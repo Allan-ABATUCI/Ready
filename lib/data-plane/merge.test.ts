@@ -57,6 +57,7 @@ describe("applyDecisions", () => {
     expect(r.rows).toEqual(parsed.rows);
     expect(r.sourceRows).toEqual([0, 1, 2, 3, 4]);
     expect(r.removed).toEqual([]);
+    expect(r.mergedGroups).toBe(0);
   });
 
   it("ignores keep_both decisions", () => {
@@ -69,6 +70,7 @@ describe("applyDecisions", () => {
     const r = applyDecisions(parsed, candidates, d);
     expect(r.sourceRows).toEqual([0, 1, 3, 4]);
     expect(r.removed).toEqual([2]);
+    expect(r.mergedGroups).toBe(1);
     expect(r.rows[0]).toEqual(["Zoë Müller", "zoe@example.test", "+49 30 1234567"]);
   });
 
@@ -80,6 +82,7 @@ describe("applyDecisions", () => {
     const r = applyDecisions(parsed, candidates, d);
     expect(r.sourceRows).toEqual([0, 1, 4]);
     expect(r.removed).toEqual([2, 3]);
+    expect(r.mergedGroups).toBe(1);
     expect(r.rows[0]).toEqual(["Zoë Müller", "zoe.m@example.test", "+49 30 7654321"]);
   });
 

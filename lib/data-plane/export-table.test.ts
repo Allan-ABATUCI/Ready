@@ -111,4 +111,85 @@ describe("buildExportTable", () => {
       expect(exported({ isoDates: false })).toEqual(["01/02/2024", "31/12/2024", "31/04/2024", "", "2024-03-05"]);
     });
   });
+
+  describe("change tracking", () => {
+    // Every change kind occurs at least once, plus one merge (rows 1 and 4 share an email).
+    const changes = processCsv(readFileSync("tests/fixtures/export-changes.csv", "utf8"));
+    const mergedAll = applyDecisions(changes.parsed, changes.duplicates, {
+      "0:3": { action: "merge", fields: {} },
+    });
+    const build = (cellRows?: number) =>
+      buildExportTable(changes, mergedAll, "hubspot", DEFAULT_EXPORT_OPTIONS, cellRows);
+
+    it("counts every kind of change over the whole table, and rows in / out", () => {
+      expect(build().changes).toEqual({
+        counts: {
+          case_fixed: 1,
+          trimmed: 2,
+          email_lowercased: 2,
+          phone_e164: 1,
+          date_iso: 1,
+          phone_unchanged: 1,
+          date_unchanged: 1,
+        },
+        rowsIn: 4,
+        rowsOut: 3,
+        mergedGroups: 1,
+        cells: [],
+      });
+    });
+
+    it("lists changed and unconverted cells, by output row and file column, for the rows asked", () => {
+      const { cells } = build(Infinity).changes;
+      expect(cells).toEqual([
+        { row: 0, col: 0, kinds: ["case_fixed"], before: "avery example", after: "Avery Example" },
+        {
+          row: 0,
+          col: 1,
+          kinds: ["trimmed", "email_lowercased"],
+          before: " AVERY@EXAMPLE.TEST ",
+          after: "avery@example.test",
+        },
+        { row: 0, col: 2, kinds: ["phone_e164"], before: "+44 20 7946 0958", after: "+442079460958" },
+        { row: 0, col: 4, kinds: ["date_iso"], before: "31/12/2024", after: "2024-12-31" },
+        {
+          row: 0,
+          col: 5,
+          kinds: ["trimmed"],
+          before: "  first line\r\nsecond line ",
+          after: "first line\r\nsecond line",
+        },
+        { row: 1, col: 2, kinds: ["phone_unchanged"], before: "555-0100", after: "555-0100" },
+        { row: 1, col: 4, kinds: ["date_unchanged"], before: "31/04/2024", after: "31/04/2024" },
+        { row: 2, col: 1, kinds: ["email_lowercased"], before: "Zoë@Example.test", after: "zoë@example.test" },
+      ]);
+      expect(build(1).changes.cells.every((c) => c.row === 0)).toBe(true);
+      // Listing cells doesn't change the table or the counts.
+      expect({ ...build(Infinity), changes: null }).toEqual({ ...build(), changes: null });
+      expect(build(Infinity).changes.counts).toEqual(build().changes.counts);
+    });
+
+    it("records nothing when every option is off", () => {
+      const off = buildExportTable(
+        changes,
+        mergedAll,
+        "hubspot",
+        {
+          trim: false,
+          lowercaseEmails: false,
+          fixCase: false,
+          normalizePhones: false,
+          isoDates: false,
+          defaultCountry: null,
+        },
+        Infinity,
+      ).changes;
+      expect(Object.values(off.counts).every((n) => n === 0)).toBe(true);
+      expect(off.cells).toEqual([]);
+    });
+
+    it("is deterministic", () => {
+      expect(build(Infinity)).toEqual(build(Infinity));
+    });
+  });
 });

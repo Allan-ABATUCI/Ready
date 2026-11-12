@@ -1,6 +1,6 @@
 import "client-only";
 import type { Crm } from "@/lib/rule-packs/types";
-import { planColumns, projectRow } from "./crm-mapping";
+import { planColumns, projectRow, type OutputColumn } from "./crm-mapping";
 import { readDate } from "./dates";
 import { dateColumns } from "./issues";
 import type { MergeResult } from "./merge";
@@ -43,12 +43,62 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   defaultCountry: null,
 };
 
+/**
+ * What cleaning did to a cell. The first five change the value; the `_unchanged`
+ * kinds mark phones and dates that couldn't be converted and were kept as written.
+ */
+export type ChangeKind =
+  "case_fixed" | "trimmed" | "email_lowercased" | "phone_e164" | "date_iso" | "phone_unchanged" | "date_unchanged";
+
+export const CHANGE_KINDS: ChangeKind[] = [
+  "case_fixed",
+  "trimmed",
+  "email_lowercased",
+  "phone_e164",
+  "date_iso",
+  "phone_unchanged",
+  "date_unchanged",
+];
+
+export function isConversionFailure(kind: ChangeKind): boolean {
+  return kind === "phone_unchanged" || kind === "date_unchanged";
+}
+
+/** One cleaned cell of the merged table: `col` is the file's column, before it is mapped to CRM headers. */
+export interface CellChange {
+  /** Zero-based output row. */
+  row: number;
+  col: number;
+  kinds: ChangeKind[];
+  before: string;
+  after: string;
+}
+
+export interface ExportChanges {
+  /** Cells per kind, over the whole table. */
+  counts: Record<ChangeKind, number>;
+  rowsIn: number;
+  rowsOut: number;
+  mergedGroups: number;
+  /** Changed or unconverted cells in the first `cellRows` output rows, by row then column. */
+  cells: CellChange[];
+}
+
 export interface ExportTable {
   headers: string[];
   rows: CsvRow[];
+  /** Where each output column comes from, so a change to a file column can be shown on the CRM column. */
+  columns: OutputColumn[];
+  changes: ExportChanges;
 }
 
-/** Pure: merged rows + cleaning options + CRM layout ⇒ the table to download. */
+/**
+ * Pure: merged rows + cleaning options + CRM layout ⇒ the table to download,
+ * with what cleaning changed. Changes are counted for every row, but listed cell
+ * by cell only for the first `cellRows` output rows: the preview needs a few,
+ * the change report all of them, and holding one object per changed cell on
+ * every re-render would be wasteful on large files.
+ */
 export function buildExportTable(
   {
     parsed,
@@ -60,6 +110,7 @@ export function buildExportTable(
   merged: MergeResult,
   crm: Crm,
   options: ExportOptions,
+  cellRows = 0,
 ): ExportTable {
   // Case fixes keyed by column, then by the trimmed NFC original value. Keyed by
   // value rather than row so they also apply to values carried over by a merge.
@@ -76,23 +127,57 @@ export function buildExportTable(
   const emailCol = roles.email;
   const phoneCol = options.normalizePhones ? roles.phone : undefined;
   const dateCols = new Set(options.isoDates ? dateColumns(profile, roles) : []);
-  const toIsoDate = (v: string) => {
-    const reading = readDate(v, dateOrder);
-    return reading.kind === "date" ? reading.iso : v;
-  };
 
-  const clean = (row: CsvRow): CsvRow =>
-    row.map((value, col) => {
-      let v = value;
+  const counts = Object.fromEntries(CHANGE_KINDS.map((k) => [k, 0])) as Record<ChangeKind, number>;
+  const cells: CellChange[] = [];
+
+  const clean = (row: CsvRow, r: number): CsvRow =>
+    row.map((before, col) => {
+      let v = before;
+      const kinds: ChangeKind[] = [];
       const fix = fixes.get(col)?.get(v.trim().normalize("NFC"));
-      if (fix !== undefined) v = fix;
-      if (options.trim) v = v.trim();
-      if (options.lowercaseEmails && col === emailCol) v = options.trim ? normalizeEmail(v) : v.toLowerCase();
-      if (col === phoneCol) v = toE164(v, options.defaultCountry) ?? v;
-      if (dateCols.has(col)) v = toIsoDate(v);
+      if (fix !== undefined) {
+        v = fix;
+        kinds.push("case_fixed");
+      }
+      if (options.trim && v !== v.trim()) {
+        v = v.trim();
+        kinds.push("trimmed");
+      }
+      if (options.lowercaseEmails && col === emailCol) {
+        const lower = options.trim ? normalizeEmail(v) : v.toLowerCase();
+        if (lower !== v) kinds.push("email_lowercased");
+        v = lower;
+      }
+      // Blank phones and dates are not failed conversions: there is nothing to convert.
+      if (col === phoneCol && v.trim() !== "") {
+        const e164 = toE164(v, options.defaultCountry);
+        if (e164 === null) kinds.push("phone_unchanged");
+        else if (e164 !== v) kinds.push("phone_e164");
+        v = e164 ?? v;
+      }
+      if (dateCols.has(col) && v.trim() !== "") {
+        const reading = readDate(v, dateOrder);
+        if (reading.kind !== "date") kinds.push("date_unchanged");
+        else if (reading.iso !== v) kinds.push("date_iso");
+        if (reading.kind === "date") v = reading.iso;
+      }
+      for (const k of kinds) counts[k]++;
+      if (kinds.length > 0 && r < cellRows) cells.push({ row: r, col, kinds, before, after: v });
       return v;
     });
 
   const columns = planColumns(parsed.headers, crm, roles);
-  return { headers: columns.map((c) => c.header), rows: merged.rows.map((r) => projectRow(clean(r), columns)) };
+  return {
+    headers: columns.map((c) => c.header),
+    rows: merged.rows.map((row, r) => projectRow(clean(row, r), columns)),
+    columns,
+    changes: {
+      counts,
+      rowsIn: parsed.rows.length,
+      rowsOut: merged.rows.length,
+      mergedGroups: merged.mergedGroups,
+      cells,
+    },
+  };
 }

@@ -58,6 +58,8 @@ export interface MergeResult {
   sourceRows: number[];
   /** Original row indexes folded into another row. */
   removed: number[];
+  /** Output rows made from two or more original rows. */
+  mergedGroups: number;
 }
 
 /**
@@ -102,5 +104,5 @@ export function applyDecisions(parsed: ParsedCsv, candidates: DuplicateCandidate
     rows.push(records.get(i) ?? parsed.rows[i]!);
     sourceRows.push(i);
   }
-  return { rows, sourceRows, removed };
+  return { rows, sourceRows, removed, mergedGroups: records.size };
 }

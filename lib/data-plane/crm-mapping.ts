@@ -98,6 +98,12 @@ export function planColumns(headers: string[], crm: Crm, keys: ColumnRoles): Out
   return out;
 }
 
+/** The file columns an output column is made from. */
+export function sourceColumns(s: ColumnSource): number[] {
+  if (s.kind !== "join") return [s.index];
+  return [s.first, s.last].filter((c) => c !== undefined);
+}
+
 export function projectRow(row: CsvRow, columns: OutputColumn[]): CsvRow {
   const cell = (i: number | undefined) => (i === undefined ? "" : (row[i] ?? ""));
   return columns.map(({ source: s }) => {

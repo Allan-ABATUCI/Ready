@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_EXPORT_OPTIONS, type ExportOptions } from "@/lib/data-plane/export-table";
@@ -160,5 +161,56 @@ describe("ExportPanel rule-pack checks", () => {
     render(<ExportPanel {...base} crm="hubspot" rulePack={null} rulePackStatus="failed" />);
     expect(screen.getByTestId("crm-rules")).toHaveTextContent("Couldn't verify the HubSpot import rules");
     expect(screen.getByRole("button", { name: "Download CSV" })).toBeEnabled();
+  });
+});
+
+describe("ExportPanel preview and change report", () => {
+  const changes = processCsv(readFileSync("tests/fixtures/export-changes.csv", "utf8"));
+  const many = processCsv(
+    ["Full Name,Email", ...Array.from({ length: 30 }, (_, i) => `Person ${i}, p${i}@example.test`)].join("\n"),
+  );
+
+  it("previews the first 20 export rows under the CRM headers, highlighting cleaned cells", () => {
+    render(<OptionsHarness result={changes} download={vi.fn()} />);
+    const preview = screen.getByTestId("export-preview");
+    expect(
+      within(preview)
+        .getAllByRole("columnheader")
+        .map((h) => h.textContent),
+    ).toEqual(["Name", "Email", "Phone", "Organization", "Signup", "Notes"]);
+    const [first, second] = within(preview).getAllByRole("row").slice(1);
+    const cells = (row: HTMLElement) => within(row).getAllByRole("cell");
+    expect(cells(first!)[0]).toHaveTextContent("Avery Example");
+    expect(cells(first!)[0]).toHaveAttribute("data-change", "changed");
+    expect(cells(first!)[0]).toHaveAttribute("title", "Capitalization fixed");
+    expect(cells(first!)[3]).not.toHaveAttribute("data-change");
+    expect(cells(second!)[2]).toHaveAttribute("data-change", "unconverted");
+    expect(screen.getByTestId("change-summary")).toHaveTextContent("Capitalization fixed: 2");
+  });
+
+  it("shows the changes of every file column behind a joined column", () => {
+    // Pipedrive joins first and last name into one "Name" column.
+    render(<OptionsHarness result={processCsv("First Name,Last Name\nAVERY,Example\n")} download={vi.fn()} />);
+    const name = within(screen.getByTestId("export-preview")).getAllByRole("cell")[0]!;
+    expect(name).toHaveTextContent("Avery Example");
+    expect(name).toHaveAttribute("data-change", "changed");
+  });
+
+  it("caps the preview at 20 rows", () => {
+    render(<OptionsHarness result={many} download={vi.fn()} />);
+    expect(within(screen.getByTestId("export-preview")).getAllByRole("row")).toHaveLength(1 + 20);
+    expect(screen.getByText("Preview (first 20 of 30 rows)")).toBeInTheDocument();
+    expect(screen.getByTestId("change-summary")).toHaveTextContent("Extra spaces removed: 30");
+  });
+
+  it("downloads a change report covering every row, not just the preview", async () => {
+    const download = vi.fn();
+    render(<OptionsHarness result={many} download={download} />);
+    await userEvent.click(screen.getByRole("button", { name: "Download change report" }));
+    const [name, headers, rows] = download.mock.lastCall! as [string, string[], string[][]];
+    expect(name).toBe("ready-pipedrive-report.csv");
+    expect(headers.slice(0, 2)).toEqual(["Summary", "Count"]);
+    expect(rows.filter((r) => r[2] === "Extra spaces removed")).toHaveLength(30);
+    expect(rows.at(-1)).toEqual(["30", "Email", "Extra spaces removed", " p29@example.test", "p29@example.test"]);
   });
 });

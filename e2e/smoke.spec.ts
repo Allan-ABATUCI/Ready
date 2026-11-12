@@ -27,6 +27,9 @@ test("profiles a file and shows duplicates side by side", async ({ page }) => {
   // Signed HubSpot pack is fetched and verified; two contacts have no email.
   await expect(page.getByTestId("crm-rules")).toContainText("Checked against HubSpot rules v1.0.0");
   await expect(page.getByTestId("crm-rules")).toContainText("Required field is empty: Email (2 rows)");
+  // Preview of the export, with the case fix on "avery example" highlighted.
+  await expect(page.getByTestId("export-preview")).toContainText("Preview (first 7 of 7 rows)");
+  await expect(page.getByTestId("export-preview").locator('td[data-change="changed"]').first()).toBeVisible();
 
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download CSV" }).click();

@@ -18,7 +18,7 @@ export interface RequirementIssue {
  * table has no column for is reported once; otherwise each empty or malformed
  * cell is reported. Sorted by field order in the pack, then row.
  */
-export function checkRequirements(table: ExportTable, pack: RulePack): RequirementIssue[] {
+export function checkRequirements(table: Pick<ExportTable, "headers" | "rows">, pack: RulePack): RequirementIssue[] {
   const colOf = (field: string) => table.headers.findIndex((h) => h.toLowerCase() === field.toLowerCase());
   const out: RequirementIssue[] = [];
 

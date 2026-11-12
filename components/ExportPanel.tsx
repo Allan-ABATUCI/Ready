@@ -1,10 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
-import { CRM_LABELS } from "@/lib/data-plane/crm-mapping";
+import { buildChangeReport, CHANGE_LABELS } from "@/lib/data-plane/change-report";
+import { CRM_LABELS, sourceColumns } from "@/lib/data-plane/crm-mapping";
 import { downloadCsv } from "@/lib/data-plane/export";
 import {
   buildExportTable,
+  CHANGE_KINDS,
+  isConversionFailure,
+  type ChangeKind,
   type ExportOptions,
   type ExportToggle,
   type SetExportOption,
@@ -29,6 +33,8 @@ const OPTION_LABELS: Record<ExportToggle, string> = {
   normalizePhones: "International phone format (+33…)",
   isoDates: "Dates as YYYY-MM-DD",
 };
+
+const PREVIEW_ROWS = 20;
 
 export interface ExportPanelProps {
   result: ProcessResult;
@@ -60,9 +66,31 @@ export function ExportPanel({
     [result.parsed, result.duplicates, decisions],
   );
   const table = useMemo(
-    () => (crm ? buildExportTable(result, merged, crm, options) : null),
+    () => (crm ? buildExportTable(result, merged, crm, options, PREVIEW_ROWS) : null),
     [result, merged, crm, options],
   );
+  // Change kinds per preview cell, keyed "row:outputCol". An output column made
+  // from several file columns (a joined name) shows the changes of all of them.
+  const previewChanges = useMemo(() => {
+    const out = new Map<string, ChangeKind[]>();
+    if (!table) return out;
+    const bySource = new Map(table.changes.cells.map((c) => [`${c.row}:${c.col}`, c.kinds]));
+    table.columns.forEach((column, j) => {
+      for (let r = 0; r < Math.min(PREVIEW_ROWS, table.rows.length); r++) {
+        const kinds = sourceColumns(column.source).flatMap((c) => bySource.get(`${r}:${c}`) ?? []);
+        if (kinds.length > 0) out.set(`${r}:${j}`, kinds);
+      }
+    });
+    return out;
+  }, [table]);
+
+  const downloadReport = () => {
+    if (!crm) return;
+    // Rebuilt with every row listed: the memoized table only lists the preview rows.
+    const full = buildExportTable(result, merged, crm, options, Infinity);
+    const report = buildChangeReport(full, result.parsed.headers);
+    download(`ready-${crm}-report.csv`, report.headers, report.rows);
+  };
   const activePack = rulePack && rulePack.crm === crm ? rulePack : null;
   const requirementGroups = useMemo(() => {
     if (!table || !activePack) return null;
@@ -125,6 +153,58 @@ export function ExportPanel({
         {table && <> · columns: {table.headers.join(", ")}</>}
       </p>
 
+      {table && (
+        <>
+          <p className="mt-1 text-sm text-slate-600" data-testid="change-summary">
+            {CHANGE_KINDS.filter((k) => table.changes.counts[k] > 0)
+              .map((k) => `${CHANGE_LABELS[k]}: ${table.changes.counts[k]}`)
+              .join(" · ") || "No values changed by clean-up."}
+          </p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-xs" data-testid="export-preview">
+              <caption className="text-left text-sm font-medium text-slate-700">
+                Preview (first {Math.min(PREVIEW_ROWS, table.rows.length)} of {table.rows.length} rows)
+              </caption>
+              <thead className="text-slate-500">
+                <tr>
+                  {table.headers.map((h) => (
+                    <th key={h} className="py-1 pr-3 font-medium">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {table.rows.slice(0, PREVIEW_ROWS).map((row, r) => (
+                  <tr key={r} className="border-t border-slate-100">
+                    {row.map((value, j) => {
+                      const kinds = previewChanges.get(`${r}:${j}`);
+                      const failed = kinds?.some(isConversionFailure);
+                      return (
+                        <td
+                          key={j}
+                          data-change={kinds ? (failed ? "unconverted" : "changed") : undefined}
+                          title={kinds?.map((k) => CHANGE_LABELS[k]).join("; ")}
+                          className={`py-1 pr-3 align-top break-words ${
+                            kinds ? (failed ? "bg-amber-100" : "bg-emerald-50") : ""
+                          }`}
+                        >
+                          {value}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-1 text-xs text-slate-500">
+              <span className="bg-emerald-50 px-1">Changed by clean-up</span>{" "}
+              <span className="bg-amber-100 px-1">Couldn&apos;t convert, left as written</span>
+            </p>
+          </div>
+        </>
+      )}
+
       {crm && (
         <div className="mt-3 text-sm" data-testid="crm-rules">
           {rulePackStatus === "loading" && <p className="text-slate-500">Loading {CRM_LABELS[crm]} import rules…</p>}
@@ -161,6 +241,14 @@ export function ExportPanel({
         onClick={() => table && crm && download(`ready-${crm}.csv`, table.headers, table.rows)}
       >
         Download CSV
+      </button>
+      <button
+        type="button"
+        disabled={!table || !crm}
+        className="mt-3 ml-3 rounded-lg border px-4 py-2 font-medium disabled:opacity-40"
+        onClick={downloadReport}
+      >
+        Download change report
       </button>
       {!crm && <span className="ml-3 text-sm text-slate-500">Pick a CRM first.</span>}
     </section>

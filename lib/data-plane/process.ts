@@ -16,18 +16,27 @@ export interface ProcessOptions extends Partial<AnalysisInputs> {
   onStage?: OnStage;
 }
 
-/** The input-dependent stages. Also run on their own when the user changes a column role or the date order. */
+/** Issue detection alone: enough after an edit that can't change duplicate pairs. */
+export function checkIssues(
+  parsed: ParsedCsv,
+  profile: ColumnProfile[],
+  { roles, dateOrder }: AnalysisInputs,
+  onStage?: OnStage,
+): Pick<Analysis, "cellIssues"> {
+  onStage?.("checking");
+  return { cellIssues: findCellIssues(parsed, profile, roles, dateOrder) };
+}
+
+/** The input-dependent stages. Also run on their own when the user changes an input or edits a cell. */
 export function analyze(
   parsed: ParsedCsv,
   profile: ColumnProfile[],
-  { roles, dateOrder, defaultCountry }: AnalysisInputs,
+  inputs: AnalysisInputs,
   onStage?: OnStage,
 ): Analysis {
   onStage?.("matching");
-  const { candidates, skippedLargeBlocks } = findDuplicateCandidates(parsed, roles, defaultCountry);
-  onStage?.("checking");
-  const cellIssues = findCellIssues(parsed, profile, roles, dateOrder);
-  return { duplicates: candidates, skippedLargeBlocks, cellIssues };
+  const { candidates, skippedLargeBlocks } = findDuplicateCandidates(parsed, inputs.roles, inputs.defaultCountry);
+  return { duplicates: candidates, skippedLargeBlocks, ...checkIssues(parsed, profile, inputs, onStage) };
 }
 
 /**

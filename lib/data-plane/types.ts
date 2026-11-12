@@ -89,6 +89,15 @@ export interface Analysis {
 }
 
 /** `roles` and `dateOrder` are the ones the analysis used: detected from the file, or chosen by the user. */
+/**
+ * What to recompute: "all" (matching and issues) after a change that can alter
+ * duplicate pairs, "issues" after one that can't, such as editing a cell no role uses.
+ */
+export type AnalysisScope = "all" | "issues";
+
+/** The result of `analyze` for a scope: issues only for "issues". */
+export type AnalysisUpdate = Analysis | Pick<Analysis, "cellIssues">;
+
 export interface ProcessResult extends Analysis, AnalysisInputs {
   parsed: ParsedCsv;
   profile: ColumnProfile[];

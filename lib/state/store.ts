@@ -3,11 +3,21 @@
 import { create } from "zustand";
 import { isExactMatch, pairKey, type Decisions, type FieldSide, type PairAction } from "@/lib/data-plane/merge";
 import { DEFAULT_EXPORT_OPTIONS, type ExportOptions, type SetExportOption } from "@/lib/data-plane/export-table";
-import { assignRole, type KeyColumn } from "@/lib/data-plane/columns";
+import { assignRole, isRoleColumn, type KeyColumn } from "@/lib/data-plane/columns";
+import { cellKey, type Overrides } from "@/lib/data-plane/overrides";
 import type { DateOrder } from "@/lib/data-plane/dates";
 import type { CountryCode } from "@/lib/data-plane/phone";
-import type { Analysis, AnalysisInputs, ProcessResult, Stage } from "@/lib/data-plane/types";
+import type { AnalysisInputs, AnalysisScope, AnalysisUpdate, ProcessResult, Stage } from "@/lib/data-plane/types";
 import type { Crm, RulePack, RulePackManifest, RulePackStatus } from "@/lib/rule-packs/types";
+
+/**
+ * A re-analysis to run. Scope "all" means duplicate pairs may change, so it also
+ * clears merge decisions; "issues" keeps them.
+ */
+export interface AnalysisRequest {
+  inputs: AnalysisInputs;
+  scope: AnalysisScope;
+}
 
 const inputsOf = ({ roles, dateOrder, defaultCountry }: AnalysisInputs): AnalysisInputs => ({
   roles,
@@ -31,15 +41,20 @@ export interface ReadyState {
   stage: Stage | null;
   result: ProcessResult | null;
   /**
-   * The re-analysis in progress after a role or date-order change, or null.
-   * `inputs` is compared by identity to drop results that a newer change made stale.
+   * The re-analysis in progress after a change, or null. `inputs` is compared by
+   * identity to drop results that a newer change made stale.
    */
-  pendingAnalysis: { inputs: AnalysisInputs; clearsDecisions: boolean } | null;
+  pendingAnalysis: AnalysisRequest | null;
   selectedCandidate: number;
   /** Merge decisions keyed by `pairKey` ("a:b"). */
   decisions: Decisions;
   /** Earlier `decisions`, oldest first, for undo. One entry per user action, bulk ones included. */
   history: Decisions[];
+  /**
+   * Cells the user fixed by hand. `result.parsed` stays as loaded; everything
+   * downstream (re-analysis, review, merge, export) uses `applyOverrides`.
+   */
+  overrides: Overrides;
   /** Destination CRM picked by the user; export is disabled until set. */
   crm: Crm | null;
   exportOptions: ExportOptions;
@@ -57,21 +72,27 @@ export interface ReadyState {
    * column. Clears merge decisions, since candidate pairs will change, and
    * returns the inputs for the caller to re-analyze with (null if no file).
    */
-  setRole: (role: KeyColumn, col: number | null) => AnalysisInputs | null;
+  setRole: (role: KeyColumn, col: number | null) => AnalysisRequest | null;
   /**
    * Read dates in `order` (null: "not sure"). Keeps merge decisions, since dates
    * don't affect duplicate pairs. Returns the inputs to re-analyze with, or null
    * if there is no file or nothing changed.
    */
-  setDateOrder: (order: DateOrder | null) => AnalysisInputs | null;
+  setDateOrder: (order: DateOrder | null) => AnalysisRequest | null;
   /**
    * Read national phone numbers as from `country` (null: none). Clears merge
    * decisions, since phone matches change. Returns the inputs to re-analyze
    * with, or null if there is no file or nothing changed.
    */
-  setDefaultCountry: (country: CountryCode | null) => AnalysisInputs | null;
+  setDefaultCountry: (country: CountryCode | null) => AnalysisRequest | null;
+  /**
+   * Replace one cell's value. Editing a role column changes what duplicates are
+   * found, so it clears decisions and needs scope "all"; other columns only need
+   * issues re-checked. Returns what to re-analyze, or null if nothing changed.
+   */
+  setOverride: (row: number, col: number, value: string) => AnalysisRequest | null;
   /** Store a re-analysis; ignored if the inputs have changed again since it started. */
-  finishAnalysis: (inputs: AnalysisInputs, analysis: Analysis) => void;
+  finishAnalysis: (inputs: AnalysisInputs, analysis: AnalysisUpdate) => void;
   selectCandidate: (index: number) => void;
   /** Set the action for candidate `index`, keeping any field picks. */
   decide: (index: number, action: PairAction) => void;
@@ -100,6 +121,7 @@ const initial = {
   selectedCandidate: 0,
   decisions: {} as Decisions,
   history: [] as Decisions[],
+  overrides: {} as Overrides,
   crm: null as Crm | null,
   exportOptions: DEFAULT_EXPORT_OPTIONS,
   rulePack: null as RulePack | null,
@@ -122,16 +144,13 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
   // place that clears decisions because pairs changed also clears the history.
   const cleared = { decisions: {}, history: [], selectedCandidate: 0 };
 
-  const startAnalysis = (result: ProcessResult, inputs: AnalysisInputs, clearsDecisions: boolean) => {
-    // If a role change is still being analyzed, this run replaces it, so it must
-    // also clear decisions the user made against the old pairs in the meantime.
-    const clears = clearsDecisions || (get().pendingAnalysis?.clearsDecisions ?? false);
-    set({
-      result: { ...result, ...inputs },
-      pendingAnalysis: { inputs, clearsDecisions: clears },
-      ...(clearsDecisions && cleared),
-    });
-    return inputs;
+  const startAnalysis = (result: ProcessResult, inputs: AnalysisInputs, scope: AnalysisScope): AnalysisRequest => {
+    // This run replaces any pending one. If that one was full, this one must be
+    // too, or the new pairs (and the clearing of decisions made against the old
+    // ones in the meantime) would be lost.
+    const request = { inputs, scope: get().pendingAnalysis?.scope === "all" ? "all" : scope } as const;
+    set({ result: { ...result, ...inputs }, pendingAnalysis: request, ...(scope === "all" && cleared) });
+    return request;
   };
 
   return {
@@ -142,24 +161,33 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
     setStage: (stage) => {
       if (get().status === "processing" || get().pendingAnalysis) set({ stage });
     },
-    finishProcessing: (result) => set({ status: "ready", stage: null, result, ...cleared }),
+    finishProcessing: (result) => set({ status: "ready", stage: null, result, overrides: {}, ...cleared }),
     failProcessing: () => set({ status: "error", stage: null, result: null, pendingAnalysis: null, ...cleared }),
     setRole: (role, col) => {
       const { result } = get();
       if (!result) return null;
-      return startAnalysis(result, { ...inputsOf(result), roles: assignRole(result.roles, role, col) }, true);
+      return startAnalysis(result, { ...inputsOf(result), roles: assignRole(result.roles, role, col) }, "all");
     },
     setDateOrder: (dateOrder) => {
       const { result } = get();
       if (!result || result.dateOrder === dateOrder) return null;
       // Duplicate matching never looks at dates, so the pairs and decisions stay valid.
-      return startAnalysis(result, { ...inputsOf(result), dateOrder }, false);
+      return startAnalysis(result, { ...inputsOf(result), dateOrder }, "issues");
     },
     setDefaultCountry: (defaultCountry) => {
       const { result } = get();
       if (!result || result.defaultCountry === defaultCountry) return null;
       // Phone keys change, so pairs may appear or disappear.
-      return startAnalysis(result, { ...inputsOf(result), defaultCountry }, true);
+      return startAnalysis(result, { ...inputsOf(result), defaultCountry }, "all");
+    },
+    setOverride: (row, col, value) => {
+      const { result, overrides } = get();
+      if (!result || !result.parsed.rows[row]) return null;
+      const current = overrides[cellKey(row, col)] ?? result.parsed.rows[row][col] ?? "";
+      if (value === current) return null;
+      set({ overrides: { ...overrides, [cellKey(row, col)]: value } });
+      // A fresh inputs object, so an older analysis still running is recognized as stale.
+      return startAnalysis(result, inputsOf(result), isRoleColumn(result.roles, col) ? "all" : "issues");
     },
     finishAnalysis: (inputs, analysis) => {
       const { result, pendingAnalysis } = get();
@@ -169,7 +197,7 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
         result: { ...result, ...analysis },
         pendingAnalysis: null,
         stage: null,
-        ...(pendingAnalysis.clearsDecisions && cleared),
+        ...(pendingAnalysis.scope === "all" && cleared),
       });
     },
     selectCandidate: (selectedCandidate) => set({ selectedCandidate }),

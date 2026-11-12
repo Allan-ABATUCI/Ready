@@ -1,6 +1,14 @@
 import "client-only";
 import { logEvent } from "@/lib/diagnostics";
-import type { Analysis, AnalysisInputs, ColumnProfile, ParsedCsv, ProcessResult, Stage } from "./types";
+import type {
+  AnalysisInputs,
+  AnalysisScope,
+  AnalysisUpdate,
+  ColumnProfile,
+  ParsedCsv,
+  ProcessResult,
+  Stage,
+} from "./types";
 import type { WorkerRequest, WorkerResponse } from "./worker/protocol";
 
 type Done = Extract<WorkerResponse, { type: "processed" | "analyzed" }>;
@@ -57,14 +65,15 @@ export async function processFileInWorker(file: File, onStage?: (stage: Stage) =
   return msg.result;
 }
 
-/** Re-run duplicate and issue detection with new roles or date order, off the main thread. */
+/** Re-run duplicate and/or issue detection after a change, off the main thread. */
 export async function analyzeInWorker(
   parsed: ParsedCsv,
   profile: ColumnProfile[],
   inputs: AnalysisInputs,
+  scope: AnalysisScope,
   onStage?: (stage: Stage) => void,
-): Promise<Analysis> {
-  const msg = await runInWorker({ type: "analyze", parsed, profile, inputs }, onStage);
+): Promise<AnalysisUpdate> {
+  const msg = await runInWorker({ type: "analyze", parsed, profile, inputs, scope }, onStage);
   if (msg.type !== "analyzed") throw new Error("worker_failed");
   return msg.analysis;
 }

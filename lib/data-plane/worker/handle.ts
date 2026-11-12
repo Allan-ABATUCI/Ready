@@ -1,6 +1,6 @@
 import "client-only";
 import { decodeCsvBytes } from "../csv";
-import { analyze, processCsv } from "../process";
+import { analyze, checkIssues, processCsv } from "../process";
 import type { Stage } from "../types";
 import type { WorkerRequest, WorkerResponse } from "./protocol";
 
@@ -29,7 +29,8 @@ export async function handleRequest(req: WorkerRequest, post: (msg: WorkerRespon
       endStage();
       post({ type: "processed", result });
     } else {
-      const analysis = analyze(req.parsed, req.profile, req.inputs, onStage);
+      const run = req.scope === "all" ? analyze : checkIssues;
+      const analysis = run(req.parsed, req.profile, req.inputs, onStage);
       endStage();
       post({ type: "analyzed", analysis });
     }

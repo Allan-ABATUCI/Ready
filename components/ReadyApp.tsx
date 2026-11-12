@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { fetchRulePackManifest } from "@/lib/control-plane-client/rule-packs";
-import type { KeyColumn } from "@/lib/data-plane/columns";
+import { isRoleColumn, type KeyColumn } from "@/lib/data-plane/columns";
 import type { DateOrder } from "@/lib/data-plane/dates";
+import { applyOverrides } from "@/lib/data-plane/overrides";
 import type { CountryCode } from "@/lib/data-plane/phone";
 import { analyzeInWorker, processFileInWorker } from "@/lib/data-plane/run";
 import { logEvent, toErrorCode } from "@/lib/diagnostics";
-import type { AnalysisInputs, Stage } from "@/lib/data-plane/types";
+import type { Stage } from "@/lib/data-plane/types";
 import { loadVerifiedRulePack } from "@/lib/rule-packs/load";
-import { useReadyStore } from "@/lib/state/store";
+import { useReadyStore, type AnalysisRequest } from "@/lib/state/store";
 import { DuplicateReview } from "./DuplicateReview";
 import { ExportPanel } from "./ExportPanel";
 import { FileDrop } from "./FileDrop";
@@ -33,6 +34,7 @@ export function ReadyApp() {
     selectedCandidate,
     decisions,
     history,
+    overrides,
     crm,
     exportOptions,
     rulePack,
@@ -45,6 +47,7 @@ export function ReadyApp() {
     setRole,
     setDateOrder,
     setDefaultCountry,
+    setOverride,
     finishAnalysis,
     selectCandidate,
     decide,
@@ -82,10 +85,15 @@ export function ReadyApp() {
     }
   };
 
-  const reanalyze = async (inputs: AnalysisInputs | null) => {
-    if (!inputs || !result) return;
+  const reanalyze = async (request: AnalysisRequest | null) => {
+    // Read the store now, not the render's `result`: the request was just made,
+    // and an edit's override isn't in this render's state yet.
+    const { result: current, overrides: edits } = useReadyStore.getState();
+    if (!request || !current) return;
+    const { inputs, scope } = request;
     try {
-      finishAnalysis(inputs, await analyzeInWorker(result.parsed, result.profile, inputs, setStage));
+      const parsed = applyOverrides(current.parsed, edits);
+      finishAnalysis(inputs, await analyzeInWorker(parsed, current.profile, inputs, scope, setStage));
     } catch (e) {
       // The analysis is pure code over data that already parsed, so this is not
       // expected; fail visibly rather than show results for the old inputs.
@@ -109,6 +117,18 @@ export function ReadyApp() {
 
   const onDateOrder = (order: DateOrder | null) => reanalyze(setDateOrder(order));
 
+  const onEdit = async (row: number, col: number, value: string) => {
+    if (!result) return;
+    if (isRoleColumn(result.roles, col) && !confirmClearDecisions("a value used to find duplicates")) return;
+    await reanalyze(setOverride(row, col, value));
+  };
+
+  // The file as the user has fixed it: what every section shows, merges and exports.
+  const edited = useMemo(
+    () => (result ? { ...result, parsed: applyOverrides(result.parsed, overrides) } : null),
+    [result, overrides],
+  );
+
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-10">
       <header>
@@ -124,32 +144,33 @@ export function ReadyApp() {
         {status === "ready" && !reanalyzing && "Done."}
       </p>
 
-      {status === "ready" && result && (
+      {status === "ready" && edited && (
         <>
           <ProfileSummary
-            profile={result.profile}
-            rowCount={result.parsed.rows.length}
-            encoding={result.parsed.encoding}
-            roles={result.roles}
+            profile={edited.profile}
+            rowCount={edited.parsed.rows.length}
+            encoding={edited.parsed.encoding}
+            roles={edited.roles}
             onRole={onRole}
-            dateOrder={result.dateOrder}
+            dateOrder={edited.dateOrder}
             onDateOrder={onDateOrder}
-            defaultCountry={result.defaultCountry}
+            defaultCountry={edited.defaultCountry}
             onDefaultCountry={onDefaultCountry}
             busy={reanalyzing}
           />
           <IssuesSummary
-            headers={result.parsed.headers}
-            rows={result.parsed.rows}
-            issues={result.cellIssues}
+            headers={edited.parsed.headers}
+            rows={edited.parsed.rows}
+            issues={edited.cellIssues}
             onDateOrder={onDateOrder}
+            onEdit={onEdit}
             busy={reanalyzing}
           />
           <DuplicateReview
-            parsed={result.parsed}
-            candidates={result.duplicates}
-            roles={result.roles}
-            skippedLargeBlocks={result.skippedLargeBlocks}
+            parsed={edited.parsed}
+            candidates={edited.duplicates}
+            roles={edited.roles}
+            skippedLargeBlocks={edited.skippedLargeBlocks}
             selected={selectedCandidate}
             onSelect={selectCandidate}
             decisions={decisions}
@@ -161,7 +182,7 @@ export function ReadyApp() {
             canUndo={history.length > 0}
           />
           <ExportPanel
-            result={result}
+            result={edited}
             decisions={decisions}
             crm={crm}
             options={exportOptions}

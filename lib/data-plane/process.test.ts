@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { analyze, processCsv } from "./process";
+import { analyze, checkIssues, processCsv } from "./process";
 
 describe("processCsv", () => {
   it("returns parsed data, profile, duplicates and cell issues in one deterministic pass", () => {
@@ -92,5 +92,12 @@ describe("processCsv", () => {
     it("ignores date-looking values outside date columns", () => {
       expect(processCsv("Name,Ref\nA,31/12/2024\nB,x\nC,y\n").dateOrder).toBeNull();
     });
+  });
+
+  it("checkIssues() re-checks issues alone, matching analyze()'s issues", () => {
+    const r = processCsv("Name,Email,Signup\nAvery Example,bad@,2024-02-30\nAVERY EXAMPLE,bad@,2024-01-01\n");
+    const stages: string[] = [];
+    expect(checkIssues(r.parsed, r.profile, r, (s) => stages.push(s))).toEqual({ cellIssues: r.cellIssues });
+    expect(stages).toEqual(["checking"]);
   });
 });

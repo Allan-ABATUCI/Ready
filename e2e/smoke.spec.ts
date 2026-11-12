@@ -151,3 +151,35 @@ test("reviews many pairs: filter by email, merge all shown, undo", async ({ page
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByTestId("review-progress")).toContainText("Reviewed 0 of");
 });
+
+test("fixes flagged cells in place, and the fixes reach the export", async ({ page }) => {
+  await page.goto("/");
+  await page
+    .getByTestId("file-input")
+    .setInputFiles(path.join(__dirname, "..", "tests", "fixtures", "contacts-issues.csv"));
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+  const issues = page.getByTestId("issues");
+
+  // Not a role column: only issues are re-checked.
+  await issues.getByText("Invalid date in Signup Date").click();
+  await page.getByLabel("Fix row 2, Signup Date").fill("2024-02-28");
+  await page.getByLabel("Fix row 2, Signup Date").press("Enter");
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+  await expect(issues).not.toContainText("Invalid date");
+
+  // The email column is used for matching, so this re-runs duplicate detection.
+  page.on("dialog", (d) => void d.accept());
+  await issues.getByText("Invalid email in Email").click();
+  await page.getByLabel("Fix row 3, Email").fill("bo@example.test");
+  await issues.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+  await expect(issues).not.toContainText("Invalid email");
+
+  await page.getByLabel("HubSpot").check();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download CSV" }).click();
+  const file = readFileSync((await (await download).path())!, "utf8");
+  expect(file).toContain("2024-02-28");
+  expect(file).toContain("bo@example.test");
+  expect(file).not.toContain("bo@@example.test");
+});

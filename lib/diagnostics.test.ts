@@ -89,7 +89,13 @@ describe("diagnostics never contain file data", () => {
     if (done.type !== "processed") return;
     const { parsed, profile, roles, dateOrder, defaultCountry } = done.result;
     await handleRequest(
-      { type: "analyze", parsed, profile, inputs: { roles: { ...roles, company: 4 }, dateOrder, defaultCountry } },
+      {
+        type: "analyze",
+        parsed,
+        profile,
+        inputs: { roles: { ...roles, company: 4 }, dateOrder, defaultCountry },
+        scope: "all",
+      },
       (m) => messages.push(m),
     );
     for (const m of messages) receive(m);

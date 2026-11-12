@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { DateOrder } from "@/lib/data-plane/dates";
 import type { CellIssue, CellIssueCode } from "@/lib/data-plane/types";
 import { groupBy } from "@/lib/group";
@@ -39,16 +40,65 @@ export function groupIssues(issues: CellIssue[]): Group[] {
   }));
 }
 
+interface CellEditorProps {
+  value: string;
+  label: string;
+  suggestion?: string;
+  onSave: (value: string) => void;
+  disabled: boolean;
+}
+
+/** Edit one flagged cell. Keyed by its value by the caller, so the draft resets when the value changes. */
+function CellEditor({ value, label, suggestion, onSave, disabled }: CellEditorProps) {
+  const [draft, setDraft] = useState(value);
+  return (
+    <form
+      className="flex items-center gap-1"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave(draft);
+      }}
+    >
+      <input
+        aria-label={label}
+        className="rounded border px-1 py-0.5"
+        value={draft}
+        disabled={disabled}
+        onChange={(e) => setDraft(e.target.value)}
+      />
+      <button
+        type="submit"
+        className="rounded border px-2 py-0.5 disabled:opacity-40"
+        disabled={disabled || draft === value}
+      >
+        Save
+      </button>
+      {suggestion !== undefined && (
+        <button
+          type="button"
+          className="rounded border px-2 py-0.5 disabled:opacity-40"
+          disabled={disabled}
+          onClick={() => onSave(suggestion)}
+        >
+          Use suggestion
+        </button>
+      )}
+    </form>
+  );
+}
+
 export interface IssuesSummaryProps {
   headers: string[];
   rows: string[][];
   issues: CellIssue[];
   /** Offered next to ambiguous dates, since choosing an order is how they're resolved. */
   onDateOrder?: (order: DateOrder | null) => void;
+  /** Fix a flagged cell in place. Without it the list is read-only. */
+  onEdit?: (row: number, col: number, value: string) => void;
   busy?: boolean;
 }
 
-export function IssuesSummary({ headers, rows, issues, onDateOrder, busy = false }: IssuesSummaryProps) {
+export function IssuesSummary({ headers, rows, issues, onDateOrder, onEdit, busy = false }: IssuesSummaryProps) {
   const groups = groupIssues(issues);
   // Ambiguous dates only exist while the order is "not sure", so the picker starts there.
   const hasAmbiguousDates = issues.some((i) => i.code === "ambiguous_date");
@@ -72,38 +122,58 @@ export function IssuesSummary({ headers, rows, issues, onDateOrder, busy = false
         <p className="mt-2 text-sm text-slate-600">No formatting issues found.</p>
       ) : (
         <ul className="mt-3 flex flex-col gap-2 text-sm">
-          {groups.map((g) => (
-            <li key={`${g.code}:${g.col}`}>
-              <details>
-                <summary className="cursor-pointer">
-                  <span className="font-medium text-slate-800">{LABELS[g.code]}</span> in{" "}
-                  <span className="font-medium">{headers[g.col] || "(blank column)"}</span>
-                  <span className="text-slate-500"> · {g.issues.length}</span>
-                </summary>
-                <table className="mt-2 ml-4 text-left">
-                  <thead className="text-slate-500">
-                    <tr>
-                      <th className="pr-4 font-medium">Row</th>
-                      <th className="pr-4 font-medium">Value</th>
-                      {g.code === "inconsistent_case" && <th className="font-medium">Suggested</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {g.issues.slice(0, MAX_ROWS_SHOWN).map((i) => (
-                      <tr key={i.row}>
-                        <td className="pr-4">{i.row + 1}</td>
-                        <td className="pr-4 break-words">{rows[i.row]?.[i.col] ?? ""}</td>
-                        {g.code === "inconsistent_case" && <td>{i.suggestion}</td>}
+          {groups.map((g) => {
+            const hasSuggestions = g.issues.some((i) => i.suggestion !== undefined);
+            const column = headers[g.col] || "(blank column)";
+            return (
+              <li key={`${g.code}:${g.col}`}>
+                <details>
+                  <summary className="cursor-pointer">
+                    <span className="font-medium text-slate-800">{LABELS[g.code]}</span> in{" "}
+                    <span className="font-medium">{column}</span>
+                    <span className="text-slate-500"> · {g.issues.length}</span>
+                  </summary>
+                  <table className="mt-2 ml-4 text-left">
+                    <thead className="text-slate-500">
+                      <tr>
+                        <th className="pr-4 font-medium">Row</th>
+                        <th className="pr-4 font-medium">Value</th>
+                        {hasSuggestions && <th className="pr-4 font-medium">Suggested</th>}
+                        {onEdit && <th className="font-medium">Fix</th>}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {g.issues.length > MAX_ROWS_SHOWN && (
-                  <p className="ml-4 text-slate-500">…and {g.issues.length - MAX_ROWS_SHOWN} more</p>
-                )}
-              </details>
-            </li>
-          ))}
+                    </thead>
+                    <tbody>
+                      {g.issues.slice(0, MAX_ROWS_SHOWN).map((i) => {
+                        const value = rows[i.row]?.[i.col] ?? "";
+                        return (
+                          <tr key={i.row}>
+                            <td className="pr-4">{i.row + 1}</td>
+                            <td className="pr-4 break-words">{value}</td>
+                            {hasSuggestions && <td className="pr-4">{i.suggestion}</td>}
+                            {onEdit && (
+                              <td>
+                                <CellEditor
+                                  key={value}
+                                  value={value}
+                                  label={`Fix row ${i.row + 1}, ${column}`}
+                                  suggestion={i.suggestion}
+                                  onSave={(v) => onEdit(i.row, i.col, v)}
+                                  disabled={busy}
+                                />
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {g.issues.length > MAX_ROWS_SHOWN && (
+                    <p className="ml-4 text-slate-500">…and {g.issues.length - MAX_ROWS_SHOWN} more</p>
+                  )}
+                </details>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

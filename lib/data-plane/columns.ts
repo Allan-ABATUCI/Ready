@@ -70,6 +70,11 @@ export function detectKeyColumns(headers: string[]): ColumnRoles {
   return found;
 }
 
+/** True if `col` plays a role, i.e. its values are used to find duplicates. */
+export function isRoleColumn(roles: ColumnRoles, col: number): boolean {
+  return KEY_COLUMNS.some((k) => roles[k] === col);
+}
+
 /**
  * Give `role` to column `col` (or to no column when `col` is null). The role
  * leaves whichever column had it, and `col` loses any role it had, so both

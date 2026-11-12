@@ -3,6 +3,7 @@ import { token_sort_ratio, ratio, type FuzzballBaseOptions } from "fuzzball";
 import { groupBy } from "@/lib/group";
 import type { ColumnRoles } from "./columns";
 import { joinName } from "./names";
+import { toE164, type CountryCode } from "./phone";
 import type { DuplicateCandidate, MatchField, ParsedCsv } from "./types";
 import { isValidEmail, normalizeEmail, normalizePhone } from "./validate";
 
@@ -37,14 +38,16 @@ export interface DuplicateMatches {
   skippedLargeBlocks: number;
 }
 
-export function keyRows(parsed: ParsedCsv, cols: ColumnRoles): Keyed[] {
+export function keyRows(parsed: ParsedCsv, cols: ColumnRoles, defaultCountry: CountryCode | null): Keyed[] {
   const cell = (row: string[], idx: number | undefined) => (idx === undefined ? "" : (row[idx] ?? "").trim());
 
   return parsed.rows.map((row) => {
     const email = cell(row, cols.email);
-    // Digits only, so "+33 6…" and "06…" don't match. toE164 (phone.ts) could
-    // unify them, but only with a default country, which dedupe doesn't have yet.
-    const phone = normalizePhone(cell(row, cols.phone));
+    // E.164 when the number is valid, so "+33 6 12…", "0033 6 12…" and (with
+    // France as the default country) "06 12…" share a key. Numbers it can't
+    // read fall back to their digits, which still match identical numbers.
+    const raw = cell(row, cols.phone);
+    const phone = toE164(raw, defaultCountry) ?? normalizePhone(raw);
     const name =
       cols.name !== undefined ? cell(row, cols.name) : joinName(cell(row, cols.firstName), cell(row, cols.lastName));
     return {
@@ -119,8 +122,12 @@ function blockKeys(r: Keyed): string[] {
  * phone or a name signature are scored, with the same `scorePair` as a full
  * pairwise scan. Output order is fully deterministic: score desc, then a, then b.
  */
-export function findDuplicateCandidates(parsed: ParsedCsv, roles: ColumnRoles): DuplicateMatches {
-  const rows = keyRows(parsed, roles);
+export function findDuplicateCandidates(
+  parsed: ParsedCsv,
+  roles: ColumnRoles,
+  defaultCountry: CountryCode | null,
+): DuplicateMatches {
+  const rows = keyRows(parsed, roles, defaultCountry);
   const n = rows.length;
 
   const entries = rows.flatMap((r, row) => blockKeys(r).map((key) => ({ key, row })));

@@ -79,4 +79,37 @@ describe("ProfileSummary", () => {
       expect(select).toBeDisabled();
     });
   });
+
+  describe("default phone country", () => {
+    const label = "Default country for numbers without +";
+
+    it("is offered only when a column is the phone", () => {
+      render(<ProfileSummary profile={profile} rowCount={2} roles={{ email: 0 }} onDefaultCountry={() => {}} />);
+      expect(screen.queryByLabelText(label)).not.toBeInTheDocument();
+    });
+
+    it("shows the current country, reports changes, and is disabled while busy", async () => {
+      const onDefaultCountry = vi.fn();
+      const { rerender } = render(
+        <ProfileSummary profile={profile} rowCount={2} roles={{ phone: 1 }} onDefaultCountry={onDefaultCountry} />,
+      );
+      const select = screen.getByLabelText(label);
+      expect(select).toHaveValue("");
+      await userEvent.selectOptions(select, "France (+33)");
+      expect(onDefaultCountry).toHaveBeenLastCalledWith("FR");
+
+      rerender(
+        <ProfileSummary
+          profile={profile}
+          rowCount={2}
+          roles={{ phone: 1 }}
+          defaultCountry="FR"
+          onDefaultCountry={onDefaultCountry}
+          busy
+        />,
+      );
+      expect(screen.getByLabelText(label)).toHaveValue("FR");
+      expect(screen.getByLabelText(label)).toBeDisabled();
+    });
+  });
 });

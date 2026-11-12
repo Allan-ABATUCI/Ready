@@ -5,16 +5,18 @@ import { detectKeyColumns } from "./columns";
 import { parseCsv } from "./csv";
 import { findDuplicateCandidates as findWithRoles, keyRows, MAX_BLOCK, nameSignature, scorePair } from "./dedupe";
 import { applyDecisions, pairKey } from "./merge";
+import type { CountryCode } from "./phone";
 import type { DuplicateCandidate, ParsedCsv } from "./types";
 
 const text = readFileSync("tests/fixtures/contacts-duplicates.csv", "utf8");
 
 /** Dedupe with the roles detected from the headers, as processCsv does by default. */
-const findDuplicateCandidates = (parsed: ParsedCsv) => findWithRoles(parsed, detectKeyColumns(parsed.headers));
+const findDuplicateCandidates = (parsed: ParsedCsv, country: CountryCode | null = null) =>
+  findWithRoles(parsed, detectKeyColumns(parsed.headers), country);
 
 /** The previous O(n²) implementation: the reference that blocking must reproduce. */
-function naiveCandidates(parsed: ParsedCsv): DuplicateCandidate[] {
-  const rows = keyRows(parsed, detectKeyColumns(parsed.headers));
+function naiveCandidates(parsed: ParsedCsv, country: CountryCode | null = null): DuplicateCandidate[] {
+  const rows = keyRows(parsed, detectKeyColumns(parsed.headers), country);
   const out: DuplicateCandidate[] = [];
   for (let a = 0; a < rows.length; a++) {
     for (let b = a + 1; b < rows.length; b++) {
@@ -93,6 +95,35 @@ describe("blocking is equivalent to the pairwise scan", () => {
     const expected = naiveCandidates(parsed);
     expect(expected.length).toBeGreaterThan(30); // the generator really did inject duplicates
     expect(findDuplicateCandidates(parsed)).toEqual({ candidates: expected, skippedLargeBlocks: 0 });
+  });
+});
+
+describe("phones across national and international formats", () => {
+  const parsed = parseCsv(readFileSync("tests/fixtures/phones-mixed.csv", "utf8"));
+  const pairsFor = (country: CountryCode | null) =>
+    findDuplicateCandidates(parsed, country).candidates.map((c) => [c.a, c.b, c.matchedOn.join()]);
+
+  it("matches only same-format numbers without a default country", () => {
+    // "+33 6 12…" vs "06 12…" can't be compared without knowing the country.
+    expect(pairsFor(null)).toEqual([]);
+  });
+
+  it("matches national numbers with international ones in the default country", () => {
+    expect(pairsFor("FR")).toEqual([
+      [0, 1, "phone"],
+      [2, 3, "phone"],
+    ]);
+    // A UK national number isn't read as UK when the default is France.
+    expect(pairsFor("GB")).toEqual([[4, 5, "phone"]]);
+  });
+
+  it("blocking still matches the pairwise scan with a country", () => {
+    for (const country of ["FR", "GB"] as const) {
+      expect(findDuplicateCandidates(parsed, country)).toEqual({
+        candidates: naiveCandidates(parsed, country),
+        skippedLargeBlocks: 0,
+      });
+    }
   });
 });
 

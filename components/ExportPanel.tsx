@@ -14,7 +14,6 @@ import {
   type SetExportOption,
 } from "@/lib/data-plane/export-table";
 import { applyDecisions, type Decisions } from "@/lib/data-plane/merge";
-import { PHONE_COUNTRIES, type CountryCode } from "@/lib/data-plane/phone";
 import { checkRequirements, type RequirementCode } from "@/lib/data-plane/requirements";
 import type { ProcessResult } from "@/lib/data-plane/types";
 import { groupBy } from "@/lib/group";
@@ -130,22 +129,6 @@ export function ExportPanel({
             </label>
           ))}
         </div>
-        <label className="mt-2 flex items-center gap-2 text-sm">
-          Default country for numbers without +
-          <select
-            className="rounded border px-1 py-0.5 disabled:opacity-40"
-            value={options.defaultCountry ?? ""}
-            disabled={!options.normalizePhones}
-            onChange={(e) => onOption("defaultCountry", (e.target.value || null) as CountryCode | null)}
-          >
-            <option value="">None (leave them as they are)</option>
-            {PHONE_COUNTRIES.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
       </fieldset>
 
       <p className="mt-3 text-sm text-slate-600" data-testid="export-summary">

@@ -2,6 +2,7 @@
 
 import { KEY_COLUMNS, type ColumnRoles, type KeyColumn } from "@/lib/data-plane/columns";
 import type { DateOrder } from "@/lib/data-plane/dates";
+import { PHONE_COUNTRIES, type CountryCode } from "@/lib/data-plane/phone";
 import type { ColumnProfile, CsvEncoding } from "@/lib/data-plane/types";
 import { DateOrderSelect } from "./DateOrderSelect";
 
@@ -25,6 +26,9 @@ export interface ProfileSummaryProps {
   /** How dates are read. The picker is shown only with `onDateOrder` and a date column. */
   dateOrder?: DateOrder | null;
   onDateOrder?: (order: DateOrder | null) => void;
+  /** Country for national phone numbers. The picker is shown only with `onDefaultCountry` and a phone column. */
+  defaultCountry?: CountryCode | null;
+  onDefaultCountry?: (country: CountryCode | null) => void;
   /** Disables the pickers, e.g. while a previous change is being applied. */
   busy?: boolean;
 }
@@ -37,6 +41,8 @@ export function ProfileSummary({
   onRole,
   dateOrder = null,
   onDateOrder,
+  defaultCountry = null,
+  onDefaultCountry,
   busy = false,
 }: ProfileSummaryProps) {
   const roleOf = (col: number) => KEY_COLUMNS.find((k) => roles[k] === col);
@@ -56,6 +62,24 @@ export function ProfileSummary({
         <div className="mt-3" data-testid="date-order">
           <DateOrderSelect value={dateOrder} onChange={onDateOrder} disabled={busy} />
         </div>
+      )}
+      {onDefaultCountry && roles.phone !== undefined && (
+        <label className="mt-3 flex items-center gap-2 text-sm">
+          Default country for numbers without +
+          <select
+            className="rounded border px-1 py-0.5"
+            value={defaultCountry ?? ""}
+            disabled={busy}
+            onChange={(e) => onDefaultCountry((e.target.value || null) as CountryCode | null)}
+          >
+            <option value="">None (only match and convert numbers with +)</option>
+            {PHONE_COUNTRIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
       )}
       <table className="mt-4 w-full text-left text-sm">
         <thead className="text-slate-500">

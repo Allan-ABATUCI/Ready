@@ -1,5 +1,6 @@
 import type { ColumnRoles } from "./columns";
 import type { DateOrder } from "./dates";
+import type { CountryCode } from "./phone";
 
 export type CsvRow = string[];
 
@@ -70,6 +71,13 @@ export interface AnalysisInputs {
   roles: ColumnRoles;
   /** How day/month dates are read; null when the file doesn't say and the user hasn't chosen. */
   dateOrder: DateOrder | null;
+  /**
+   * Country of phone numbers written without "+" or "00", used to match them
+   * with international ones and to write them in E.164. Null by default, and
+   * deliberately never inferred from navigator.language: results must depend
+   * only on the file and the user's explicit choices (CLAUDE.md).
+   */
+  defaultCountry: CountryCode | null;
 }
 
 /** Everything that depends on `AnalysisInputs`, so it is recomputed when the user changes one. */

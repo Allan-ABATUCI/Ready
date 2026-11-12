@@ -13,6 +13,7 @@ describe("useReadyStore", () => {
       profile: [],
       roles: {},
       dateOrder: null,
+      defaultCountry: null,
       duplicates: [],
       skippedLargeBlocks: 0,
       cellIssues: [],
@@ -43,6 +44,7 @@ describe("useReadyStore", () => {
       profile: [],
       roles: { name: 0 },
       dateOrder: null,
+      defaultCountry: null,
       duplicates: [{ a: 0, b: 1, score: 95, matchedOn: ["name"] }],
       skippedLargeBlocks: 0,
       cellIssues: [],
@@ -50,7 +52,7 @@ describe("useReadyStore", () => {
     s.decide(0, "merge");
 
     const first = s.setRole("email", 1)!;
-    expect(first).toEqual({ roles: { name: 0, email: 1 }, dateOrder: null });
+    expect(first).toEqual({ roles: { name: 0, email: 1 }, dateOrder: null, defaultCountry: null });
     expect(useReadyStore.getState()).toMatchObject({
       pendingAnalysis: { inputs: first },
       decisions: {},
@@ -83,6 +85,7 @@ describe("useReadyStore", () => {
         profile: [],
         roles: { name: 0 },
         dateOrder: null,
+        defaultCountry: null,
         duplicates,
         skippedLargeBlocks: 0,
         cellIssues: [dateIssue],
@@ -95,7 +98,7 @@ describe("useReadyStore", () => {
       s.selectCandidate(0);
 
       const inputs = s.setDateOrder("dmy")!;
-      expect(inputs).toEqual({ roles: { name: 0 }, dateOrder: "dmy" });
+      expect(inputs).toEqual({ roles: { name: 0 }, dateOrder: "dmy", defaultCountry: null });
       expect(useReadyStore.getState()).toMatchObject({
         pendingAnalysis: { inputs, clearsDecisions: false },
         result: { dateOrder: "dmy" },
@@ -141,6 +144,7 @@ describe("useReadyStore", () => {
       profile: [],
       roles: {},
       dateOrder: null,
+      defaultCountry: null,
       duplicates: [
         { a: 0, b: 1, score: 100, matchedOn: ["email"] },
         { a: 2, b: 3, score: 92, matchedOn: ["name"] },
@@ -207,6 +211,31 @@ describe("useReadyStore", () => {
     expect(window.sessionStorage.length).toBe(0);
   });
 
+  it("changing the default phone country re-analyzes and clears decisions", () => {
+    const s = useReadyStore.getState();
+    s.finishProcessing({
+      parsed: { headers: ["Name", "Phone"], rows: [], delimiter: ",", hadBom: false, encoding: "utf-8", issues: [] },
+      profile: [],
+      roles: { name: 0, phone: 1 },
+      dateOrder: "dmy",
+      defaultCountry: null,
+      duplicates: [{ a: 0, b: 1, score: 95, matchedOn: ["name"] }],
+      skippedLargeBlocks: 0,
+      cellIssues: [],
+    });
+    s.decide(0, "merge");
+    expect(s.setDefaultCountry(null)).toBeNull(); // unchanged
+
+    const inputs = s.setDefaultCountry("FR")!;
+    expect(inputs).toEqual({ roles: { name: 0, phone: 1 }, dateOrder: "dmy", defaultCountry: "FR" });
+    expect(useReadyStore.getState()).toMatchObject({
+      result: { defaultCountry: "FR" },
+      decisions: {},
+      history: [],
+      pendingAnalysis: { inputs, clearsDecisions: true },
+    });
+  });
+
   describe("bulk decisions and undo", () => {
     const duplicates = Array.from({ length: 60 }, (_, i) => ({
       a: 2 * i,
@@ -220,6 +249,7 @@ describe("useReadyStore", () => {
         profile: [],
         roles: { name: 0 },
         dateOrder: null,
+        defaultCountry: null,
         duplicates,
         skippedLargeBlocks: 0,
         cellIssues: [],

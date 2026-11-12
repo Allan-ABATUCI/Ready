@@ -49,7 +49,9 @@ describe("processCsv", () => {
 
     const roles = { name: 0, phone: 1, company: 2 };
     const stages: string[] = [];
-    const again = analyze(first.parsed, first.profile, { roles, dateOrder: null }, (s) => stages.push(s));
+    const again = analyze(first.parsed, first.profile, { roles, dateOrder: null, defaultCountry: null }, (s) =>
+      stages.push(s),
+    );
     expect(stages).toEqual(["matching", "checking"]);
     const full = processCsv(text, { roles });
     expect(again).toEqual({
@@ -82,7 +84,7 @@ describe("processCsv", () => {
       expect(chosen.dateOrder).toBe("mdy");
       expect(chosen.cellIssues).toEqual([{ row: 1, col: 1, code: "invalid_date" }]);
       const first = processCsv(text);
-      const again = analyze(first.parsed, first.profile, { roles: first.roles, dateOrder: "mdy" });
+      const again = analyze(first.parsed, first.profile, { ...first, dateOrder: "mdy" });
       expect(again.cellIssues).toEqual(chosen.cellIssues);
       expect(again.duplicates).toEqual(first.duplicates); // dates never affect matching
     });

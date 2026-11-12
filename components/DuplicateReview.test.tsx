@@ -53,6 +53,7 @@ function load(p: ParsedCsv, duplicates: DuplicateCandidate[], roles: ColumnRoles
     profile: [],
     roles,
     dateOrder: null,
+    defaultCountry: null,
     duplicates,
     skippedLargeBlocks: 0,
     cellIssues: [],

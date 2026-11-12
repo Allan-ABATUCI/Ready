@@ -20,11 +20,11 @@ export interface ProcessOptions extends Partial<AnalysisInputs> {
 export function analyze(
   parsed: ParsedCsv,
   profile: ColumnProfile[],
-  { roles, dateOrder }: AnalysisInputs,
+  { roles, dateOrder, defaultCountry }: AnalysisInputs,
   onStage?: OnStage,
 ): Analysis {
   onStage?.("matching");
-  const { candidates, skippedLargeBlocks } = findDuplicateCandidates(parsed, roles);
+  const { candidates, skippedLargeBlocks } = findDuplicateCandidates(parsed, roles, defaultCountry);
   onStage?.("checking");
   const cellIssues = findCellIssues(parsed, profile, roles, dateOrder);
   return { duplicates: candidates, skippedLargeBlocks, cellIssues };
@@ -33,9 +33,12 @@ export function analyze(
 /**
  * Pure pipeline: text in, results out. Runs inside the Web Worker. Roles default
  * to those detected from the headers, and the date order to the one the date
- * columns' values settle (see `detectDateOrder`).
+ * columns' values settle (see `detectDateOrder`), and there is no default phone country.
  */
-export function processCsv(text: string, { encoding, roles, dateOrder, onStage }: ProcessOptions = {}): ProcessResult {
+export function processCsv(
+  text: string,
+  { encoding, roles, dateOrder, defaultCountry = null, onStage }: ProcessOptions = {},
+): ProcessResult {
   onStage?.("parsing");
   const parsed = parseCsv(text, encoding);
   onStage?.("profiling");
@@ -45,6 +48,6 @@ export function processCsv(text: string, { encoding, roles, dateOrder, onStage }
     dateOrder !== undefined
       ? dateOrder
       : detectDateOrder(dateColumns(profile, usedRoles).flatMap((col) => parsed.rows.map((row) => row[col] ?? "")));
-  const inputs: AnalysisInputs = { roles: usedRoles, dateOrder: usedOrder };
+  const inputs: AnalysisInputs = { roles: usedRoles, dateOrder: usedOrder, defaultCountry };
   return { parsed, profile, ...inputs, ...analyze(parsed, profile, inputs, onStage) };
 }

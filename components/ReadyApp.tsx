@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { fetchRulePackManifest } from "@/lib/control-plane-client/rule-packs";
 import type { KeyColumn } from "@/lib/data-plane/columns";
 import type { DateOrder } from "@/lib/data-plane/dates";
+import type { CountryCode } from "@/lib/data-plane/phone";
 import { analyzeInWorker, processFileInWorker } from "@/lib/data-plane/run";
 import { logEvent, toErrorCode } from "@/lib/diagnostics";
 import type { AnalysisInputs, Stage } from "@/lib/data-plane/types";
@@ -43,6 +44,7 @@ export function ReadyApp() {
     failProcessing,
     setRole,
     setDateOrder,
+    setDefaultCountry,
     finishAnalysis,
     selectCandidate,
     decide,
@@ -92,15 +94,17 @@ export function ReadyApp() {
     }
   };
 
+  /** Changes that alter duplicate pairs clear merge decisions, so ask first if there are any. */
+  const confirmClearDecisions = (change: string) =>
+    Object.keys(decisions).length === 0 ||
+    window.confirm(`Changing ${change} finds duplicates again and clears your merge decisions. Continue?`);
+
   const onRole = async (role: KeyColumn, col: number | null) => {
-    const hasDecisions = Object.keys(decisions).length > 0;
-    if (
-      hasDecisions &&
-      !window.confirm("Changing a column's role finds duplicates again and clears your merge decisions. Continue?")
-    ) {
-      return;
-    }
-    await reanalyze(setRole(role, col));
+    if (confirmClearDecisions("a column's role")) await reanalyze(setRole(role, col));
+  };
+
+  const onDefaultCountry = async (country: CountryCode | null) => {
+    if (confirmClearDecisions("the default phone country")) await reanalyze(setDefaultCountry(country));
   };
 
   const onDateOrder = (order: DateOrder | null) => reanalyze(setDateOrder(order));
@@ -130,6 +134,8 @@ export function ReadyApp() {
             onRole={onRole}
             dateOrder={result.dateOrder}
             onDateOrder={onDateOrder}
+            defaultCountry={result.defaultCountry}
+            onDefaultCountry={onDefaultCountry}
             busy={reanalyzing}
           />
           <IssuesSummary

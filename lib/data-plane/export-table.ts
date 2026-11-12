@@ -4,7 +4,7 @@ import { planColumns, projectRow, type OutputColumn } from "./crm-mapping";
 import { readDate } from "./dates";
 import { dateColumns } from "./issues";
 import type { MergeResult } from "./merge";
-import { toE164, type CountryCode } from "./phone";
+import { toE164 } from "./phone";
 import type { CsvRow, ProcessResult } from "./types";
 import { normalizeEmail } from "./validate";
 
@@ -15,24 +15,19 @@ export interface ExportOptions {
   lowercaseEmails: boolean;
   /** Apply the capitalization suggestions from the issues pass. */
   fixCase: boolean;
-  /** Rewrite the phone column in E.164 ("+33612345678"); values that can't be converted are kept. */
+  /**
+   * Rewrite the phone column in E.164 ("+33612345678"), reading national numbers
+   * with the analysis' default country; values that can't be converted are kept.
+   */
   normalizePhones: boolean;
   /** Rewrite date columns as YYYY-MM-DD, read in the analysis' date order; ambiguous or invalid values are kept. */
   isoDates: boolean;
-  /**
-   * Country for phone numbers written without "+" or "00". Null by default, and
-   * deliberately never inferred from navigator.language: the export must depend
-   * only on the file, the rule pack and the user's explicit choices (CLAUDE.md).
-   */
-  defaultCountry: CountryCode | null;
 }
 
-/** The on/off options, which the UI shows as checkboxes. */
-export type ExportToggle = {
-  [K in keyof ExportOptions]: ExportOptions[K] extends boolean ? K : never;
-}[keyof ExportOptions];
+/** The options the UI shows as checkboxes: all of them. */
+export type ExportToggle = keyof ExportOptions;
 
-export type SetExportOption = <K extends keyof ExportOptions>(key: K, value: ExportOptions[K]) => void;
+export type SetExportOption = (key: ExportToggle, value: boolean) => void;
 
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   trim: true,
@@ -40,7 +35,6 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   fixCase: true,
   normalizePhones: true,
   isoDates: true,
-  defaultCountry: null,
 };
 
 /**
@@ -105,8 +99,9 @@ export function buildExportTable(
     profile,
     roles,
     dateOrder,
+    defaultCountry,
     cellIssues,
-  }: Pick<ProcessResult, "parsed" | "profile" | "roles" | "dateOrder" | "cellIssues">,
+  }: Pick<ProcessResult, "parsed" | "profile" | "roles" | "dateOrder" | "defaultCountry" | "cellIssues">,
   merged: MergeResult,
   crm: Crm,
   options: ExportOptions,
@@ -151,7 +146,7 @@ export function buildExportTable(
       }
       // Blank phones and dates are not failed conversions: there is nothing to convert.
       if (col === phoneCol && v.trim() !== "") {
-        const e164 = toE164(v, options.defaultCountry);
+        const e164 = toE164(v, defaultCountry);
         if (e164 === null) kinds.push("phone_unchanged");
         else if (e164 !== v) kinds.push("phone_e164");
         v = e164 ?? v;

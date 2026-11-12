@@ -92,25 +92,20 @@ const downloaded = async (download: ReturnType<typeof vi.fn>) => {
 };
 
 describe("ExportPanel phone options", () => {
-  const phones = processCsv("Full Name,Phone\nAvery Example,06 12 34 56 78\nBo Sample,+44 20 7946 0958\n");
+  const text = "Full Name,Phone\nAvery Example,06 12 34 56 78\nBo Sample,+44 20 7946 0958\n";
 
-  it("normalizes by default, with no default country", async () => {
+  it("normalizes by default, leaving national numbers when there is no default country", async () => {
     const download = vi.fn();
-    render(<OptionsHarness result={phones} download={download} />);
+    render(<OptionsHarness result={processCsv(text)} download={download} />);
     expect(screen.getByLabelText(/International phone format/)).toBeChecked();
-    expect(screen.getByLabelText("Default country for numbers without +")).toHaveValue("");
     expect(await downloaded(download)).toEqual(["06 12 34 56 78", "+442079460958"]);
   });
 
-  it("uses the chosen default country, and disables the picker when normalization is off", async () => {
+  it("uses the analysis' default country, and leaves numbers alone when switched off", async () => {
     const download = vi.fn();
-    render(<OptionsHarness result={phones} download={download} />);
-    const country = screen.getByLabelText("Default country for numbers without +");
-    await userEvent.selectOptions(country, "France (+33)");
+    render(<OptionsHarness result={processCsv(text, { defaultCountry: "FR" })} download={download} />);
     expect(await downloaded(download)).toEqual(["+33612345678", "+442079460958"]);
-
     await userEvent.click(screen.getByLabelText(/International phone format/));
-    expect(country).toBeDisabled();
     expect(await downloaded(download)).toEqual(["06 12 34 56 78", "+44 20 7946 0958"]);
   });
 });

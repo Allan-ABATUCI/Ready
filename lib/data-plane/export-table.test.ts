@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildExportTable, DEFAULT_EXPORT_OPTIONS, type ExportOptions } from "./export-table";
 import { applyDecisions } from "./merge";
+import type { CountryCode } from "./phone";
 import { processCsv } from "./process";
 
 const text = readFileSync("tests/fixtures/contacts-duplicates.csv", "utf8");
@@ -26,7 +27,6 @@ describe("buildExportTable", () => {
       fixCase: false,
       normalizePhones: false,
       isoDates: false,
-      defaultCountry: null,
     });
     expect(t.rows[1]).toEqual(["avery example", "AVERY@EXAMPLE.TEST", "", "Example Widgets Ltd."]);
     expect(t.rows[2]![2]).toBe("+44 20 7946 0000");
@@ -52,21 +52,26 @@ describe("buildExportTable", () => {
   });
 
   describe("phone normalization", () => {
-    const phones = processCsv("Name,Phone\nA,06 12 34 56 78\nB,0033 6 12 34 56 79\nC,+44 20 7946 0958\nD,\n");
-    const unmerged = applyDecisions(phones.parsed, phones.duplicates, {});
-    const exported = (opts: Partial<ExportOptions>) =>
-      buildExportTable(phones, unmerged, "pipedrive", { ...DEFAULT_EXPORT_OPTIONS, ...opts }).rows.map((r) => r[1]);
+    const text = "Name,Phone\nA,06 12 34 56 78\nB,0033 6 12 34 56 79\nC,+44 20 7946 0958\nD,\n";
+    // The default country is an analysis input, shared with duplicate matching.
+    const exported = (opts: Partial<ExportOptions>, defaultCountry: CountryCode | null = null) => {
+      const phones = processCsv(text, { defaultCountry });
+      const unmerged = applyDecisions(phones.parsed, phones.duplicates, {});
+      return buildExportTable(phones, unmerged, "pipedrive", { ...DEFAULT_EXPORT_OPTIONS, ...opts }).rows.map(
+        (r) => r[1],
+      );
+    };
 
     it("leaves national numbers alone when no default country is chosen", () => {
       expect(exported({})).toEqual(["06 12 34 56 78", "+33612345679", "+442079460958", ""]);
     });
 
     it("converts national numbers with the chosen default country", () => {
-      expect(exported({ defaultCountry: "FR" })).toEqual(["+33612345678", "+33612345679", "+442079460958", ""]);
+      expect(exported({}, "FR")).toEqual(["+33612345678", "+33612345679", "+442079460958", ""]);
     });
 
     it("does nothing when switched off, even with a country", () => {
-      expect(exported({ normalizePhones: false, defaultCountry: "FR" })).toEqual([
+      expect(exported({ normalizePhones: false }, "FR")).toEqual([
         "06 12 34 56 78",
         "0033 6 12 34 56 79",
         "+44 20 7946 0958",
@@ -75,11 +80,8 @@ describe("buildExportTable", () => {
     });
 
     it("only touches the phone column", () => {
-      const other = processCsv("Name,Reference\nA,06 12 34 56 78\n");
-      const t = buildExportTable(other, applyDecisions(other.parsed, [], {}), "pipedrive", {
-        ...DEFAULT_EXPORT_OPTIONS,
-        defaultCountry: "FR",
-      });
+      const other = processCsv("Name,Reference\nA,06 12 34 56 78\n", { defaultCountry: "FR" });
+      const t = buildExportTable(other, applyDecisions(other.parsed, [], {}), "pipedrive", DEFAULT_EXPORT_OPTIONS);
       expect(t.rows[0]).toEqual(["A", "06 12 34 56 78"]);
     });
   });
@@ -180,7 +182,6 @@ describe("buildExportTable", () => {
           fixCase: false,
           normalizePhones: false,
           isoDates: false,
-          defaultCountry: null,
         },
         Infinity,
       ).changes;

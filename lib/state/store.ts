@@ -5,8 +5,15 @@ import { isExactMatch, pairKey, type Decisions, type FieldSide, type PairAction 
 import { DEFAULT_EXPORT_OPTIONS, type ExportOptions, type SetExportOption } from "@/lib/data-plane/export-table";
 import { assignRole, type KeyColumn } from "@/lib/data-plane/columns";
 import type { DateOrder } from "@/lib/data-plane/dates";
+import type { CountryCode } from "@/lib/data-plane/phone";
 import type { Analysis, AnalysisInputs, ProcessResult, Stage } from "@/lib/data-plane/types";
 import type { Crm, RulePack, RulePackManifest, RulePackStatus } from "@/lib/rule-packs/types";
+
+const inputsOf = ({ roles, dateOrder, defaultCountry }: AnalysisInputs): AnalysisInputs => ({
+  roles,
+  dateOrder,
+  defaultCountry,
+});
 
 export type Status = "idle" | "processing" | "ready" | "error";
 
@@ -57,6 +64,12 @@ export interface ReadyState {
    * if there is no file or nothing changed.
    */
   setDateOrder: (order: DateOrder | null) => AnalysisInputs | null;
+  /**
+   * Read national phone numbers as from `country` (null: none). Clears merge
+   * decisions, since phone matches change. Returns the inputs to re-analyze
+   * with, or null if there is no file or nothing changed.
+   */
+  setDefaultCountry: (country: CountryCode | null) => AnalysisInputs | null;
   /** Store a re-analysis; ignored if the inputs have changed again since it started. */
   finishAnalysis: (inputs: AnalysisInputs, analysis: Analysis) => void;
   selectCandidate: (index: number) => void;
@@ -134,13 +147,19 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
     setRole: (role, col) => {
       const { result } = get();
       if (!result) return null;
-      return startAnalysis(result, { roles: assignRole(result.roles, role, col), dateOrder: result.dateOrder }, true);
+      return startAnalysis(result, { ...inputsOf(result), roles: assignRole(result.roles, role, col) }, true);
     },
     setDateOrder: (dateOrder) => {
       const { result } = get();
       if (!result || result.dateOrder === dateOrder) return null;
       // Duplicate matching never looks at dates, so the pairs and decisions stay valid.
-      return startAnalysis(result, { roles: result.roles, dateOrder }, false);
+      return startAnalysis(result, { ...inputsOf(result), dateOrder }, false);
+    },
+    setDefaultCountry: (defaultCountry) => {
+      const { result } = get();
+      if (!result || result.defaultCountry === defaultCountry) return null;
+      // Phone keys change, so pairs may appear or disappear.
+      return startAnalysis(result, { ...inputsOf(result), defaultCountry }, true);
     },
     finishAnalysis: (inputs, analysis) => {
       const { result, pendingAnalysis } = get();

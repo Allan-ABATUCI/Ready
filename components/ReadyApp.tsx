@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { fetchRulePackManifest } from "@/lib/control-plane-client/rule-packs";
 import { downloadCsv } from "@/lib/data-plane/export";
+import { applyDecisions } from "@/lib/data-plane/merge";
 import { processFileInWorker } from "@/lib/data-plane/run";
 import { useReadyStore } from "@/lib/state/store";
 import { DuplicateReview } from "./DuplicateReview";
@@ -11,8 +12,9 @@ import { IssuesSummary } from "./IssuesSummary";
 import { ProfileSummary } from "./ProfileSummary";
 
 export function ReadyApp() {
-  const { status, result, selectedCandidate, manifest } = useReadyStore();
+  const { status, result, selectedCandidate, decisions, manifest } = useReadyStore();
   const { startProcessing, finishProcessing, failProcessing, selectCandidate, setManifest, reset } = useReadyStore();
+  const { decide, chooseField, mergeAllExact } = useReadyStore();
 
   useEffect(() => {
     void fetchRulePackManifest().then(setManifest);
@@ -51,12 +53,22 @@ export function ReadyApp() {
             candidates={result.duplicates}
             selected={selectedCandidate}
             onSelect={selectCandidate}
+            decisions={decisions}
+            onDecide={decide}
+            onChooseField={chooseField}
+            onMergeAllExact={mergeAllExact}
           />
           <div className="flex gap-3">
             <button
               type="button"
               className="rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-700"
-              onClick={() => downloadCsv("ready-export.csv", result.parsed.headers, result.parsed.rows)}
+              onClick={() =>
+                downloadCsv(
+                  "ready-export.csv",
+                  result.parsed.headers,
+                  applyDecisions(result.parsed, result.duplicates, decisions).rows,
+                )
+              }
             >
               Download CSV
             </button>

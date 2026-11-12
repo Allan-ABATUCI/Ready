@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 
@@ -14,4 +15,16 @@ test("profiles a file and shows duplicates side by side", async ({ page }) => {
   await expect(page.getByTestId("issues")).toContainText("Inconsistent capitalization in Full Name");
   await expect(page.getByRole("heading", { name: /Possible duplicates/ })).toBeVisible();
   await expect(page.getByTestId("merge-preview")).toBeVisible();
+
+  // Avery (same email) and Zoë (same name + company) are exact; Bo / "Different
+  // Person" only share a phone, so they need a manual decision. 9 − 2 = 7 rows.
+  await page.getByRole("button", { name: /Merge all exact matches \(2\)/ }).click();
+  await expect(page.getByTestId("review-progress")).toContainText("2 to merge");
+
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download CSV" }).click();
+  const file = readFileSync((await (await download).path())!, "utf8");
+  const lines = file.trim().split(/\r\n/);
+  expect(lines[0]).toBe("Full Name,Email,Phone,Company");
+  expect(lines).toHaveLength(1 + 7);
 });

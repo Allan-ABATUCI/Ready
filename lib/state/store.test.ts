@@ -19,6 +19,37 @@ describe("useReadyStore", () => {
     expect(useReadyStore.getState()).toMatchObject({ status: "idle", fileName: null, result: null });
   });
 
+  it("records merge decisions and field picks, and clears them on reset", () => {
+    const s = useReadyStore.getState();
+    s.finishProcessing({
+      parsed: { headers: ["Name"], rows: [["A"], ["a"], ["B"], ["b"]], delimiter: ",", hadBom: false, issues: [] },
+      profile: [],
+      duplicates: [
+        { a: 0, b: 1, score: 100, matchedOn: ["email"] },
+        { a: 2, b: 3, score: 92, matchedOn: ["name"] },
+        { a: 1, b: 2, score: 100, matchedOn: ["phone"] },
+      ],
+      cellIssues: [],
+    });
+
+    s.chooseField(1, 0, "b");
+    expect(useReadyStore.getState().decisions).toEqual({ "2:3": { action: "merge", fields: { 0: "b" } } });
+
+    s.decide(1, "keep_both");
+    expect(useReadyStore.getState().decisions["2:3"]).toEqual({ action: "keep_both", fields: { 0: "b" } });
+
+    s.mergeAllExact();
+    expect(useReadyStore.getState().decisions["0:1"]).toEqual({ action: "merge", fields: {} });
+    expect(useReadyStore.getState().decisions["2:3"]?.action).toBe("keep_both");
+    expect(useReadyStore.getState().decisions["1:2"]).toBeUndefined(); // phone-only: review by hand
+
+    s.decide(99, "merge");
+    expect(Object.keys(useReadyStore.getState().decisions)).toHaveLength(2);
+
+    s.reset();
+    expect(useReadyStore.getState().decisions).toEqual({});
+  });
+
   it("does not persist anything to web storage", () => {
     useReadyStore.getState().startProcessing("secret-name.csv");
     expect(window.localStorage.length).toBe(0);

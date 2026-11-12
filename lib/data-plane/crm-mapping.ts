@@ -1,6 +1,6 @@
 import "client-only";
 import type { Crm } from "@/lib/rule-packs/types";
-import { detectKeyColumns } from "./columns";
+import type { ColumnRoles } from "./columns";
 import { joinName, splitName } from "./names";
 import type { CsvRow } from "./types";
 
@@ -59,9 +59,8 @@ export interface OutputColumn {
  * first in a fixed order; everything else passes through under its own header
  * (suffixed if it would collide with a CRM header).
  */
-export function planColumns(headers: string[], crm: Crm): OutputColumn[] {
+export function planColumns(headers: string[], crm: Crm, keys: ColumnRoles): OutputColumn[] {
   const layout = CRM_LAYOUTS[crm];
-  const keys = detectKeyColumns(headers);
   const used = new Set<number>();
   const out: OutputColumn[] = [];
   const take = (header: string, source: ColumnSource, ...cols: (number | undefined)[]) => {

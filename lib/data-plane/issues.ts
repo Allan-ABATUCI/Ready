@@ -1,6 +1,6 @@
 import "client-only";
 import type { FieldFormat } from "@/lib/rule-packs/types";
-import { detectKeyColumns, type KeyColumn } from "./columns";
+import type { ColumnRoles, KeyColumn } from "./columns";
 import type { CellIssue, CellIssueCode, ColumnProfile, ParsedCsv } from "./types";
 import { FORMAT_VALIDATORS } from "./validate";
 
@@ -45,8 +45,7 @@ export function titleCase(v: string): string {
   return out;
 }
 
-function formatColumns(parsed: ParsedCsv, profile: ColumnProfile[]): Map<number, FieldFormat> {
-  const keys = detectKeyColumns(parsed.headers);
+function formatColumns(profile: ColumnProfile[], keys: ColumnRoles): Map<number, FieldFormat> {
   const out = new Map<number, FieldFormat>();
   if (keys.email !== undefined) out.set(keys.email, "email");
   if (keys.phone !== undefined) out.set(keys.phone, "phone");
@@ -111,9 +110,9 @@ function caseIssues(parsed: ParsedCsv, col: number, properNoun: boolean): CellIs
  * Per-cell problems: malformed emails / phones / dates and inconsistent
  * capitalization. Pure and deterministic; output sorted by row, column, code.
  */
-export function findCellIssues(parsed: ParsedCsv, profile: ColumnProfile[]): CellIssue[] {
+export function findCellIssues(parsed: ParsedCsv, profile: ColumnProfile[], keys: ColumnRoles): CellIssue[] {
   const issues: CellIssue[] = [];
-  const formats = formatColumns(parsed, profile);
+  const formats = formatColumns(profile, keys);
 
   for (const [col, format] of formats) {
     const valid = FORMAT_VALIDATORS[format];
@@ -123,7 +122,6 @@ export function findCellIssues(parsed: ParsedCsv, profile: ColumnProfile[]): Cel
     });
   }
 
-  const keys = detectKeyColumns(parsed.headers);
   const properNounCols = new Set(PROPER_NOUN_KEYS.map((k) => keys[k]).filter((i) => i !== undefined));
   for (const c of profile) {
     const properNoun = properNounCols.has(c.index);

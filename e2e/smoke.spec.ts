@@ -53,3 +53,57 @@ test("reads an Excel-saved Windows-1252 file without mangling accents", async ({
   expect(file).toContain("Société Exemple");
   expect(file).not.toContain("\uFFFD");
 });
+
+test("recognizes French headers and finds their duplicates automatically", async ({ page }) => {
+  await page.goto("/");
+  await page
+    .getByTestId("file-input")
+    .setInputFiles(path.join(__dirname, "..", "tests", "fixtures", "contacts-fr.csv"));
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+  await expect(page.getByLabel("Use column 1 as")).toHaveValue("lastName");
+  await expect(page.getByLabel("Use column 2 as")).toHaveValue("firstName");
+  await expect(page.getByLabel("Use column 3 as")).toHaveValue("email");
+  await expect(page.getByLabel("Use column 4 as")).toHaveValue("phone");
+  await expect(page.getByLabel("Use column 5 as")).toHaveValue("company");
+  // Zoë (same email) and Amélie (same phone, same accent-folded name) are both found.
+  await expect(page.getByRole("heading", { name: /Possible duplicates/ })).toContainText("(2)");
+});
+
+test("lets the user assign a column the app didn't recognize", async ({ page }) => {
+  await page.goto("/");
+  await page
+    .getByTestId("file-input")
+    .setInputFiles(path.join(__dirname, "..", "tests", "fixtures", "unknown-email-header.csv"));
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+  await expect(page.getByLabel("Use column 2 as")).toHaveValue("");
+  await expect(page.getByRole("heading", { name: /Possible duplicates/ })).toContainText("(0)");
+
+  await page.getByLabel("Use column 2 as").selectOption("Email");
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+  await expect(page.getByRole("heading", { name: /Possible duplicates/ })).toContainText("(1)");
+  await expect(page.getByTestId("merge-preview")).toContainText("Accounts Team");
+
+  await page.getByLabel("HubSpot").check();
+  await expect(page.getByTestId("export-summary")).toContainText("columns: First Name, Last Name, Email, City");
+});
+
+test("warns before a role change clears merge decisions", async ({ page }) => {
+  await page.goto("/");
+  await page
+    .getByTestId("file-input")
+    .setInputFiles(path.join(__dirname, "..", "tests", "fixtures", "contacts-duplicates.csv"));
+  await page.getByRole("button", { name: "Merge", exact: true }).click();
+  await expect(page.getByTestId("review-progress")).toContainText("1 to merge");
+
+  // Cancel: nothing changes.
+  page.once("dialog", (d) => void d.dismiss());
+  await page.getByLabel("Use column 3 as").selectOption("");
+  await expect(page.getByLabel("Use column 3 as")).toHaveValue("phone");
+  await expect(page.getByTestId("review-progress")).toContainText("1 to merge");
+
+  // Accept: the role is cleared and decisions start over.
+  page.once("dialog", (d) => void d.accept());
+  await page.getByLabel("Use column 3 as").selectOption("");
+  await expect(page.getByLabel("Use column 3 as")).toHaveValue("");
+  await expect(page.getByTestId("review-progress")).toContainText("0 to merge");
+});

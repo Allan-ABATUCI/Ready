@@ -52,8 +52,8 @@ export function ExportPanel({
     [result.parsed, result.duplicates, decisions],
   );
   const table = useMemo(
-    () => (crm ? buildExportTable(result.parsed, merged, result.cellIssues, crm, options) : null),
-    [result.parsed, result.cellIssues, merged, crm, options],
+    () => (crm ? buildExportTable(result, merged, crm, options) : null),
+    [result, merged, crm, options],
   );
   const activePack = rulePack && rulePack.crm === crm ? rulePack : null;
   const requirementGroups = useMemo(() => {

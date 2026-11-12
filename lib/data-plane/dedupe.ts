@@ -1,7 +1,7 @@
 import "client-only";
 import { token_sort_ratio, ratio, type FuzzballBaseOptions } from "fuzzball";
 import { groupBy } from "@/lib/group";
-import { detectKeyColumns } from "./columns";
+import type { ColumnRoles } from "./columns";
 import { joinName } from "./names";
 import type { DuplicateCandidate, MatchField, ParsedCsv } from "./types";
 import { isValidEmail, normalizeEmail, normalizePhone } from "./validate";
@@ -37,8 +37,7 @@ export interface DuplicateMatches {
   skippedLargeBlocks: number;
 }
 
-export function keyRows(parsed: ParsedCsv): Keyed[] {
-  const cols = detectKeyColumns(parsed.headers);
+export function keyRows(parsed: ParsedCsv, cols: ColumnRoles): Keyed[] {
   const cell = (row: string[], idx: number | undefined) => (idx === undefined ? "" : (row[idx] ?? "").trim());
 
   return parsed.rows.map((row) => {
@@ -118,8 +117,8 @@ function blockKeys(r: Keyed): string[] {
  * phone or a name signature are scored, with the same `scorePair` as a full
  * pairwise scan. Output order is fully deterministic: score desc, then a, then b.
  */
-export function findDuplicateCandidates(parsed: ParsedCsv): DuplicateMatches {
-  const rows = keyRows(parsed);
+export function findDuplicateCandidates(parsed: ParsedCsv, roles: ColumnRoles): DuplicateMatches {
+  const rows = keyRows(parsed, roles);
   const n = rows.length;
 
   const entries = rows.flatMap((r, row) => blockKeys(r).map((key) => ({ key, row })));

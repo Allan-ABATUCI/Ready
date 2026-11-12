@@ -3,7 +3,8 @@
 import { create } from "zustand";
 import { isExactMatch, pairKey, type Decisions, type FieldSide, type PairAction } from "@/lib/data-plane/merge";
 import { DEFAULT_EXPORT_OPTIONS, type ExportOptions } from "@/lib/data-plane/export-table";
-import type { ProcessResult, Stage } from "@/lib/data-plane/types";
+import { assignRole, type ColumnRoles, type KeyColumn } from "@/lib/data-plane/columns";
+import type { Analysis, ProcessResult, Stage } from "@/lib/data-plane/types";
 import type { Crm, RulePack, RulePackManifest, RulePackStatus } from "@/lib/rule-packs/types";
 
 export type Status = "idle" | "processing" | "ready" | "error";
@@ -15,9 +16,11 @@ export type Status = "idle" | "processing" | "ready" | "error";
 export interface ReadyState {
   status: Status;
   fileName: string | null;
-  /** Current pipeline stage while processing; null otherwise. */
+  /** Current pipeline stage while processing or re-analyzing; null otherwise. */
   stage: Stage | null;
   result: ProcessResult | null;
+  /** True while duplicates and issues are recomputed after a role change. */
+  reanalyzing: boolean;
   selectedCandidate: number;
   /** Merge decisions keyed by `pairKey` ("a:b"). */
   decisions: Decisions;
@@ -33,6 +36,14 @@ export interface ReadyState {
   setStage: (stage: Stage) => void;
   finishProcessing: (result: ProcessResult) => void;
   failProcessing: () => void;
+  /**
+   * Give `role` to column `col` (null: to no column), moving it off any other
+   * column. Clears merge decisions, since candidate pairs will change, and
+   * returns the new roles for the caller to re-analyze with (null if no file).
+   */
+  setRole: (role: KeyColumn, col: number | null) => ColumnRoles | null;
+  /** Store a re-analysis; ignored if the roles have changed again since it started. */
+  finishAnalysis: (roles: ColumnRoles, analysis: Analysis) => void;
   selectCandidate: (index: number) => void;
   /** Set the action for candidate `index`, keeping any field picks. */
   decide: (index: number, action: PairAction) => void;
@@ -53,6 +64,7 @@ const initial = {
   fileName: null,
   stage: null as Stage | null,
   result: null,
+  reanalyzing: false,
   selectedCandidate: 0,
   decisions: {} as Decisions,
   crm: null as Crm | null,
@@ -73,10 +85,29 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
     startProcessing: (fileName) => set({ ...initial, status: "processing", fileName }),
     // A late progress message must not flip a finished or failed run back to a stage.
     setStage: (stage) => {
-      if (get().status === "processing") set({ stage });
+      if (get().status === "processing" || get().reanalyzing) set({ stage });
     },
     finishProcessing: (result) => set({ status: "ready", stage: null, result, selectedCandidate: 0, decisions: {} }),
-    failProcessing: () => set({ status: "error", stage: null, result: null, decisions: {} }),
+    failProcessing: () => set({ status: "error", stage: null, result: null, reanalyzing: false, decisions: {} }),
+    setRole: (role, col) => {
+      const { result } = get();
+      if (!result) return null;
+      const roles = assignRole(result.roles, role, col);
+      set({ result: { ...result, roles }, reanalyzing: true, decisions: {}, selectedCandidate: 0 });
+      return roles;
+    },
+    finishAnalysis: (roles, analysis) => {
+      const { result } = get();
+      // Identity check: a newer setRole replaced `result.roles`, so this analysis is stale.
+      if (!result || result.roles !== roles) return;
+      set({
+        result: { ...result, ...analysis },
+        reanalyzing: false,
+        stage: null,
+        decisions: {},
+        selectedCandidate: 0,
+      });
+    },
     selectCandidate: (selectedCandidate) => set({ selectedCandidate }),
     decide: (index, action) => {
       const key = keyOf(index);

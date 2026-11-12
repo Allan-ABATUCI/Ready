@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import { fetchRulePackManifest } from "@/lib/control-plane-client/rule-packs";
-import { processFileInWorker } from "@/lib/data-plane/run";
+import type { KeyColumn } from "@/lib/data-plane/columns";
+import { analyzeInWorker, processFileInWorker } from "@/lib/data-plane/run";
 import type { Stage } from "@/lib/data-plane/types";
 import { loadVerifiedRulePack } from "@/lib/rule-packs/load";
 import { useReadyStore } from "@/lib/state/store";
@@ -25,6 +26,7 @@ export function ReadyApp() {
     status,
     stage,
     result,
+    reanalyzing,
     selectedCandidate,
     decisions,
     crm,
@@ -36,6 +38,8 @@ export function ReadyApp() {
     setStage,
     finishProcessing,
     failProcessing,
+    setRole,
+    finishAnalysis,
     selectCandidate,
     decide,
     chooseField,
@@ -65,6 +69,25 @@ export function ReadyApp() {
     }
   };
 
+  const onRole = async (role: KeyColumn, col: number | null) => {
+    const hasDecisions = Object.keys(decisions).length > 0;
+    if (
+      hasDecisions &&
+      !window.confirm("Changing a column's role finds duplicates again and clears your merge decisions. Continue?")
+    ) {
+      return;
+    }
+    const roles = setRole(role, col);
+    if (!roles || !result) return;
+    try {
+      finishAnalysis(roles, await analyzeInWorker(result.parsed, result.profile, roles, setStage));
+    } catch {
+      // The analysis is pure code over data that already parsed, so this is not
+      // expected; fail visibly rather than show results for the old roles.
+      failProcessing();
+    }
+  };
+
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-6 px-6 py-10">
       <header>
@@ -75,9 +98,9 @@ export function ReadyApp() {
       <FileDrop onFile={onFile} disabled={status === "processing"} />
 
       <p role="status" aria-live="polite" className="text-sm text-slate-600" data-testid="status">
-        {status === "processing" && (stage ? STAGE_TEXT[stage] : "Processing in your browser…")}
+        {(status === "processing" || reanalyzing) && (stage ? STAGE_TEXT[stage] : "Processing in your browser…")}
         {status === "error" && "We couldn't read that file. Is it a CSV?"}
-        {status === "ready" && "Done."}
+        {status === "ready" && !reanalyzing && "Done."}
       </p>
 
       {status === "ready" && result && (
@@ -86,6 +109,9 @@ export function ReadyApp() {
             profile={result.profile}
             rowCount={result.parsed.rows.length}
             encoding={result.parsed.encoding}
+            roles={result.roles}
+            onRole={onRole}
+            busy={reanalyzing}
           />
           <IssuesSummary headers={result.parsed.headers} rows={result.parsed.rows} issues={result.cellIssues} />
           <DuplicateReview

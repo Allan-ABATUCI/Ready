@@ -10,7 +10,7 @@ const noMerges = applyDecisions(result.parsed, result.duplicates, {});
 
 describe("buildExportTable", () => {
   it("maps columns, fixes case, trims and lower-cases emails by default", () => {
-    const t = buildExportTable(result.parsed, noMerges, result.cellIssues, "hubspot", DEFAULT_EXPORT_OPTIONS);
+    const t = buildExportTable(result, noMerges, "hubspot", DEFAULT_EXPORT_OPTIONS);
     expect(t.headers).toEqual(["First Name", "Last Name", "Email", "Phone Number", "Company Name"]);
     expect(t.rows).toHaveLength(9);
     // Row 2: "avery example" / "AVERY@EXAMPLE.TEST"
@@ -20,7 +20,7 @@ describe("buildExportTable", () => {
   });
 
   it("leaves values alone when every option is off", () => {
-    const t = buildExportTable(result.parsed, noMerges, result.cellIssues, "pipedrive", {
+    const t = buildExportTable(result, noMerges, "pipedrive", {
       trim: false,
       lowercaseEmails: false,
       fixCase: false,
@@ -33,14 +33,14 @@ describe("buildExportTable", () => {
     const merged = applyDecisions(result.parsed, result.duplicates, {
       [`${avery.a}:${avery.b}`]: { action: "merge", fields: { 0: "b" } },
     });
-    const t = buildExportTable(result.parsed, merged, result.cellIssues, "salesforce", DEFAULT_EXPORT_OPTIONS);
+    const t = buildExportTable(result, merged, "salesforce", DEFAULT_EXPORT_OPTIONS);
     expect(t.rows).toHaveLength(8);
     // Picked "avery example" from row 2; the case fix still applies after the merge.
     expect(t.rows[0]!.slice(0, 3)).toEqual(["Avery", "Example", "avery@example.test"]);
   });
 
   it("is deterministic", () => {
-    const a = buildExportTable(result.parsed, noMerges, result.cellIssues, "hubspot", DEFAULT_EXPORT_OPTIONS);
-    expect(buildExportTable(result.parsed, noMerges, result.cellIssues, "hubspot", DEFAULT_EXPORT_OPTIONS)).toEqual(a);
+    const a = buildExportTable(result, noMerges, "hubspot", DEFAULT_EXPORT_OPTIONS);
+    expect(buildExportTable(result, noMerges, "hubspot", DEFAULT_EXPORT_OPTIONS)).toEqual(a);
   });
 });

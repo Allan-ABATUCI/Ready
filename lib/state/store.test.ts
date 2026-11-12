@@ -11,6 +11,7 @@ describe("useReadyStore", () => {
     s.finishProcessing({
       parsed: { headers: [], rows: [], delimiter: ",", hadBom: false, encoding: "utf-8", issues: [] },
       profile: [],
+      roles: {},
       duplicates: [],
       skippedLargeBlocks: 0,
       cellIssues: [],
@@ -33,6 +34,37 @@ describe("useReadyStore", () => {
     expect(useReadyStore.getState()).toMatchObject({ status: "error", stage: null });
   });
 
+  it("reassigns a column role, clears decisions and ignores stale analyses", () => {
+    const s = useReadyStore.getState();
+    expect(s.setRole("email", 1)).toBeNull(); // no file yet
+    s.finishProcessing({
+      parsed: { headers: ["Name", "Inbox"], rows: [], delimiter: ",", hadBom: false, encoding: "utf-8", issues: [] },
+      profile: [],
+      roles: { name: 0 },
+      duplicates: [{ a: 0, b: 1, score: 95, matchedOn: ["name"] }],
+      skippedLargeBlocks: 0,
+      cellIssues: [],
+    });
+    s.decide(0, "merge");
+
+    const first = s.setRole("email", 1)!;
+    expect(first).toEqual({ name: 0, email: 1 });
+    expect(useReadyStore.getState()).toMatchObject({ reanalyzing: true, decisions: {}, result: { roles: first } });
+
+    const second = s.setRole("email", 0)!; // the user changes their mind before the first finishes
+    expect(second).toEqual({ email: 0 });
+
+    const analysis = { duplicates: [], skippedLargeBlocks: 0, cellIssues: [] };
+    s.finishAnalysis(first, { ...analysis, skippedLargeBlocks: 99 });
+    expect(useReadyStore.getState()).toMatchObject({ reanalyzing: true, result: { skippedLargeBlocks: 0 } });
+
+    s.finishAnalysis(second, analysis);
+    expect(useReadyStore.getState()).toMatchObject({
+      reanalyzing: false,
+      result: { roles: { email: 0 }, duplicates: [] },
+    });
+  });
+
   it("records merge decisions and field picks, and clears them on reset", () => {
     const s = useReadyStore.getState();
     s.finishProcessing({
@@ -45,6 +77,7 @@ describe("useReadyStore", () => {
         issues: [],
       },
       profile: [],
+      roles: {},
       duplicates: [
         { a: 0, b: 1, score: 100, matchedOn: ["email"] },
         { a: 2, b: 3, score: 92, matchedOn: ["name"] },

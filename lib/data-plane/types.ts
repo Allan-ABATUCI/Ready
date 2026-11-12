@@ -1,3 +1,5 @@
+import type { ColumnRoles } from "./columns";
+
 export type CsvRow = string[];
 
 export interface CsvIssue {
@@ -56,13 +58,19 @@ export interface CellIssue {
   suggestion?: string;
 }
 
-export interface ProcessResult {
-  parsed: ParsedCsv;
-  profile: ColumnProfile[];
+/** Everything that depends on the column roles, so it is recomputed when the user changes one. */
+export interface Analysis {
   duplicates: DuplicateCandidate[];
   /** Rows in very common name groups that weren't compared by name (see MAX_BLOCK in dedupe.ts). */
   skippedLargeBlocks: number;
   cellIssues: CellIssue[];
+}
+
+export interface ProcessResult extends Analysis {
+  parsed: ParsedCsv;
+  profile: ColumnProfile[];
+  /** The roles the analysis used: detected from headers, or chosen by the user. */
+  roles: ColumnRoles;
 }
 
 /** Pipeline stages reported to the UI. Names only: never counts or values. */

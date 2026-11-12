@@ -42,9 +42,14 @@ function Harness() {
 
 beforeEach(() => {
   useReadyStore.getState().reset();
-  useReadyStore
-    .getState()
-    .finishProcessing({ parsed, profile: [], duplicates: candidates, skippedLargeBlocks: 0, cellIssues: [] });
+  useReadyStore.getState().finishProcessing({
+    parsed,
+    profile: [],
+    roles: {},
+    duplicates: candidates,
+    skippedLargeBlocks: 0,
+    cellIssues: [],
+  });
 });
 
 describe("DuplicateReview", () => {

@@ -1,12 +1,13 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { detectKeyColumns } from "./columns";
 import { parseCsv } from "./csv";
 import { findCellIssues, isSingleCase, titleCase } from "./issues";
 import { profileColumns } from "./profile";
 
 function issuesFor(text: string) {
   const parsed = parseCsv(text);
-  return findCellIssues(parsed, profileColumns(parsed));
+  return findCellIssues(parsed, profileColumns(parsed), detectKeyColumns(parsed.headers));
 }
 
 describe("titleCase", () => {

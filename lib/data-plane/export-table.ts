@@ -1,9 +1,8 @@
 import "client-only";
 import type { Crm } from "@/lib/rule-packs/types";
-import { detectKeyColumns } from "./columns";
 import { planColumns, projectRow } from "./crm-mapping";
 import type { MergeResult } from "./merge";
-import type { CellIssue, CsvRow, ParsedCsv } from "./types";
+import type { CsvRow, ProcessResult } from "./types";
 import { normalizeEmail } from "./validate";
 
 export interface ExportOptions {
@@ -24,9 +23,8 @@ export interface ExportTable {
 
 /** Pure: merged rows + cleaning options + CRM layout ⇒ the table to download. */
 export function buildExportTable(
-  parsed: ParsedCsv,
+  { parsed, roles, cellIssues }: Pick<ProcessResult, "parsed" | "roles" | "cellIssues">,
   merged: MergeResult,
-  cellIssues: CellIssue[],
   crm: Crm,
   options: ExportOptions,
 ): ExportTable {
@@ -42,7 +40,7 @@ export function buildExportTable(
       byValue.set(original, i.suggestion);
     }
   }
-  const emailCol = detectKeyColumns(parsed.headers).email;
+  const emailCol = roles.email;
 
   const clean = (row: CsvRow): CsvRow =>
     row.map((value, col) => {
@@ -54,6 +52,6 @@ export function buildExportTable(
       return v;
     });
 
-  const columns = planColumns(parsed.headers, crm);
+  const columns = planColumns(parsed.headers, crm, roles);
   return { headers: columns.map((c) => c.header), rows: merged.rows.map((r) => projectRow(clean(r), columns)) };
 }

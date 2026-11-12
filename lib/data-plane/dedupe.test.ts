@@ -3,15 +3,18 @@ import { describe, expect, it } from "vitest";
 import { syntheticContacts } from "@/tests/support/synthetic";
 import { detectKeyColumns } from "./columns";
 import { parseCsv } from "./csv";
-import { findDuplicateCandidates, keyRows, MAX_BLOCK, nameSignature, scorePair } from "./dedupe";
+import { findDuplicateCandidates as findWithRoles, keyRows, MAX_BLOCK, nameSignature, scorePair } from "./dedupe";
 import { applyDecisions, pairKey } from "./merge";
 import type { DuplicateCandidate, ParsedCsv } from "./types";
 
 const text = readFileSync("tests/fixtures/contacts-duplicates.csv", "utf8");
 
+/** Dedupe with the roles detected from the headers, as processCsv does by default. */
+const findDuplicateCandidates = (parsed: ParsedCsv) => findWithRoles(parsed, detectKeyColumns(parsed.headers));
+
 /** The previous O(n²) implementation: the reference that blocking must reproduce. */
 function naiveCandidates(parsed: ParsedCsv): DuplicateCandidate[] {
-  const rows = keyRows(parsed);
+  const rows = keyRows(parsed, detectKeyColumns(parsed.headers));
   const out: DuplicateCandidate[] = [];
   for (let a = 0; a < rows.length; a++) {
     for (let b = a + 1; b < rows.length; b++) {
@@ -21,18 +24,6 @@ function naiveCandidates(parsed: ParsedCsv): DuplicateCandidate[] {
   }
   return out.sort((x, y) => y.score - x.score || x.a - y.a || x.b - y.b);
 }
-
-describe("detectKeyColumns", () => {
-  it("recognizes common header spellings", () => {
-    expect(detectKeyColumns(["E-Mail", "first_name", "Last Name", "Organisation", "Mobile"])).toEqual({
-      email: 0,
-      firstName: 1,
-      lastName: 2,
-      company: 3,
-      phone: 4,
-    });
-  });
-});
 
 describe("nameSignature", () => {
   it("folds accents and case, keeps 3-character prefixes and sorts tokens", () => {

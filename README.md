@@ -12,12 +12,13 @@ No upload. No account. No SQL or code. **Your data never leaves your browser.**
 
 1. **Profile** — Drop in a CSV. Ready reads it in the browser and summarizes columns, fill rates, and value patterns.
 2. **Flag issues**
-   - **Duplicates** — fuzzy matching on name, email, phone, and company
-   - **Malformed values** — invalid emails, phone numbers, and dates
+   - **Duplicates** — fuzzy matching on name, email, phone (national and international formats), and company
+   - **Malformed values** — invalid emails, phone numbers, and dates (day-first, month-first or ISO); ambiguous dates
+   - **Likely email typos** — e.g. `gmial.com` → `gmail.com`, from a bundled list of common domains (never looked up online)
    - **Missing required fields** — based on the target CRM's import rules
    - **Inconsistent capitalization** — e.g. `ACME corp` vs. `Acme Corp`
-3. **Review** — Compare suspected duplicates side by side and decide what to merge, keep, or discard.
-4. **Export** — Download a clean, deduplicated CSV formatted for your chosen CRM.
+3. **Review** — Filter the list of suspected duplicates, compare them side by side and decide what to merge or keep (one by one, in bulk, or with keyboard shortcuts; with undo). Fix flagged cells in place.
+4. **Export** — Preview and download a clean, deduplicated CSV formatted for your chosen CRM, plus a local report of every change clean-up made.
 
 All matching and validation is **deterministic** and runs **locally**. There are no AI services or external API calls involved in processing your data.
 

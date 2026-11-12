@@ -108,4 +108,20 @@ describe("IssuesSummary", () => {
       expect(screen.getByLabelText("Fix row 1, Email")).toHaveValue("now@example");
     });
   });
+
+  it("shows email typo suggestions with a one-click fix", async () => {
+    const onEdit = vi.fn();
+    render(
+      <IssuesSummary
+        headers={["Email"]}
+        rows={[["avery@gmial.com"]]}
+        issues={[{ row: 0, col: 0, code: "email_typo", suggestion: "avery@gmail.com" }]}
+        onEdit={onEdit}
+      />,
+    );
+    expect(screen.getByText("Possible typo in email domain")).toBeInTheDocument();
+    expect(screen.getByText("avery@gmail.com")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
+    expect(onEdit).toHaveBeenCalledWith(0, 0, "avery@gmail.com");
+  });
 });

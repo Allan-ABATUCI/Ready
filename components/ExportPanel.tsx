@@ -29,6 +29,7 @@ const OPTION_LABELS: Record<ExportToggle, string> = {
   trim: "Trim extra spaces",
   lowercaseEmails: "Lower-case email addresses",
   fixCase: "Fix capitalization",
+  fixEmailTypos: "Fix likely email typos (gmial.com → gmail.com)",
   normalizePhones: "International phone format (+33…)",
   isoDates: "Dates as YYYY-MM-DD",
 };

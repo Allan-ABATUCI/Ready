@@ -4,6 +4,7 @@ import type { CsvRow } from "./types";
 
 export const CHANGE_LABELS: Record<ChangeKind, string> = {
   case_fixed: "Capitalization fixed",
+  email_typo_fixed: "Email typo fixed",
   trimmed: "Extra spaces removed",
   email_lowercased: "Email lower-cased",
   phone_e164: "Phone in international format",

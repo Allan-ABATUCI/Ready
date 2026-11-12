@@ -15,11 +15,12 @@ const csv = toCsv(report.headers, report.rows);
 
 describe("buildChangeReport", () => {
   it("starts with the summary counts", () => {
-    expect(report.rows.slice(0, 10).map((r) => r.slice(0, 2))).toEqual([
+    expect(report.rows.slice(0, 11).map((r) => r.slice(0, 2))).toEqual([
       ["Rows in", "4"],
       ["Rows out", "3"],
       ["Merged groups", "1"],
       ["Capitalization fixed", "1"],
+      ["Email typo fixed", "0"],
       ["Extra spaces removed", "2"],
       ["Email lower-cased", "2"],
       ["Phone in international format", "1"],
@@ -37,7 +38,7 @@ describe("buildChangeReport", () => {
       ["1", "Email", "Extra spaces removed; Email lower-cased", " AVERY@EXAMPLE.TEST ", "avery@example.test"],
     ]);
     expect(report.rows.at(-1)).toEqual(["3", "Email", "Email lower-cased", "Zoë@Example.test", "zoë@example.test"]);
-    expect(report.rows).toHaveLength(10 + 1 + 1 + 8);
+    expect(report.rows).toHaveLength(11 + 1 + 1 + 8);
   });
 
   it("writes a rectangular CSV that round-trips multiline and unicode values", () => {

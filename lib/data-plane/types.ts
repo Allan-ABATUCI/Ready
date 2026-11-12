@@ -47,6 +47,8 @@ export interface DuplicateCandidate {
 
 export type CellIssueCode =
   | "invalid_email"
+  /** A valid address whose domain looks like a typo of a common one; `suggestion` holds the fix. */
+  | "email_typo"
   | "invalid_phone"
   | "invalid_date"
   /** Reads as two different dates (day/month or month/day) and no date order is set. */
@@ -60,7 +62,7 @@ export interface CellIssue {
   col: number;
   code: CellIssueCode;
   /**
-   * Proposed replacement (only for `inconsistent_case`). Derived from file data,
+   * Proposed replacement (for `inconsistent_case` and `email_typo`). Derived from file data,
    * so it stays in the browser like every other value.
    */
   suggestion?: string;

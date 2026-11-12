@@ -209,3 +209,16 @@ describe("ExportPanel preview and change report", () => {
     expect(rows.at(-1)).toEqual(["30", "Email", "Extra spaces removed", " p29@example.test", "p29@example.test"]);
   });
 });
+
+describe("ExportPanel email typo option", () => {
+  it("is off by default and applies the suggestions when ticked", async () => {
+    const download = vi.fn();
+    render(<OptionsHarness result={processCsv("Name,Email\nAvery,avery@gmial.com\n")} download={download} />);
+    const option = screen.getByLabelText(/Fix likely email typos/);
+    expect(option).not.toBeChecked();
+    expect(await downloaded(download)).toEqual(["avery@gmial.com"]);
+    await userEvent.click(option);
+    expect(await downloaded(download)).toEqual(["avery@gmail.com"]);
+    expect(screen.getByTestId("change-summary")).toHaveTextContent("Email typo fixed: 1");
+  });
+});

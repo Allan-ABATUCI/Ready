@@ -25,6 +25,7 @@ describe("buildExportTable", () => {
       trim: false,
       lowercaseEmails: false,
       fixCase: false,
+      fixEmailTypos: false,
       normalizePhones: false,
       isoDates: false,
     });
@@ -127,6 +128,7 @@ describe("buildExportTable", () => {
       expect(build().changes).toEqual({
         counts: {
           case_fixed: 1,
+          email_typo_fixed: 0,
           trimmed: 2,
           email_lowercased: 2,
           phone_e164: 1,
@@ -180,6 +182,7 @@ describe("buildExportTable", () => {
           trim: false,
           lowercaseEmails: false,
           fixCase: false,
+          fixEmailTypos: false,
           normalizePhones: false,
           isoDates: false,
         },
@@ -191,6 +194,33 @@ describe("buildExportTable", () => {
 
     it("is deterministic", () => {
       expect(build(Infinity)).toEqual(build(Infinity));
+    });
+  });
+
+  describe("email typo fixes", () => {
+    const typos = processCsv(
+      "Name,Email\nAvery Example,avery@gmial.com\nBo Sample,bo@ymail.com\nZoë Ångström,Zoë@Hotmial.fr\n",
+    );
+    const unmerged = applyDecisions(typos.parsed, typos.duplicates, {});
+    const build = (fixEmailTypos: boolean) =>
+      buildExportTable(typos, unmerged, "pipedrive", { ...DEFAULT_EXPORT_OPTIONS, fixEmailTypos }, Infinity);
+
+    it("are off by default", () => {
+      expect(DEFAULT_EXPORT_OPTIONS.fixEmailTypos).toBe(false);
+      expect(build(false).rows.map((r) => r[1])).toEqual(["avery@gmial.com", "bo@ymail.com", "zoë@hotmial.fr"]);
+    });
+
+    it("apply the suggestions when on, before lower-casing, and are counted", () => {
+      const t = build(true);
+      expect(t.rows.map((r) => r[1])).toEqual(["avery@gmail.com", "bo@ymail.com", "zoë@hotmail.fr"]);
+      expect(t.changes.counts.email_typo_fixed).toBe(2);
+      expect(t.changes.cells[1]).toEqual({
+        row: 2,
+        col: 1,
+        kinds: ["email_typo_fixed", "email_lowercased"],
+        before: "Zoë@Hotmial.fr",
+        after: "zoë@hotmail.fr",
+      });
     });
   });
 });

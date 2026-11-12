@@ -2,6 +2,7 @@ import "client-only";
 import type { FieldFormat } from "@/lib/rule-packs/types";
 import type { ColumnRoles, KeyColumn } from "./columns";
 import { readDate, type DateOrder } from "./dates";
+import { suggestEmailFix } from "./email-typos";
 import type { CellIssue, CellIssueCode, ColumnProfile, ParsedCsv } from "./types";
 import { FORMAT_VALIDATORS } from "./validate";
 
@@ -64,13 +65,20 @@ export function dateColumns(profile: ColumnProfile[], keys: ColumnRoles): number
   return [...formatColumns(profile, keys)].filter(([, f]) => f === "date").map(([col]) => col);
 }
 
+type FoundIssue = Pick<CellIssue, "code" | "suggestion">;
+
 /** The issue for one non-empty value of a `format` column, or null if it's fine. */
-function formatIssue(format: FieldFormat, value: string, dateOrder: DateOrder | null): CellIssueCode | null {
+function formatIssue(format: FieldFormat, value: string, dateOrder: DateOrder | null): FoundIssue | null {
   if (format === "date") {
     const { kind } = readDate(value, dateOrder);
-    return kind === "date" ? null : kind === "ambiguous" ? "ambiguous_date" : "invalid_date";
+    return kind === "date" ? null : { code: kind === "ambiguous" ? "ambiguous_date" : "invalid_date" };
   }
-  return FORMAT_VALIDATORS[format](value) ? null : FORMAT_ISSUE[format];
+  if (!FORMAT_VALIDATORS[format](value)) return { code: FORMAT_ISSUE[format] };
+  if (format === "email") {
+    const suggestion = suggestEmailFix(value);
+    if (suggestion !== null) return { code: "email_typo", suggestion };
+  }
+  return null;
 }
 
 interface Variant {
@@ -123,8 +131,8 @@ function caseIssues(parsed: ParsedCsv, col: number, properNoun: boolean): CellIs
 }
 
 /**
- * Per-cell problems: malformed emails / phones / dates, ambiguous dates and
- * inconsistent capitalization. Dates are read in `dateOrder` (see `readDate`).
+ * Per-cell problems: malformed emails / phones / dates, likely email domain
+ * typos, ambiguous dates and inconsistent capitalization. Dates are read in `dateOrder` (see `readDate`).
  * Pure and deterministic; output sorted by row, column, code.
  */
 export function findCellIssues(
@@ -139,8 +147,8 @@ export function findCellIssues(
   for (const [col, format] of formats) {
     parsed.rows.forEach((row, r) => {
       const value = (row[col] ?? "").trim();
-      const code = value === "" ? null : formatIssue(format, value, dateOrder);
-      if (code) issues.push({ row: r, col, code });
+      const found = value === "" ? null : formatIssue(format, value, dateOrder);
+      if (found) issues.push({ row: r, col, ...found });
     });
   }
 

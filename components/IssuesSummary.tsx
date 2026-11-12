@@ -8,6 +8,7 @@ import { DateOrderSelect } from "./DateOrderSelect";
 
 const LABELS: Record<CellIssueCode, string> = {
   invalid_email: "Invalid email",
+  email_typo: "Possible typo in email domain",
   invalid_phone: "Invalid phone number",
   invalid_date: "Invalid date",
   ambiguous_date: "Date could be day/month or month/day",
@@ -16,6 +17,7 @@ const LABELS: Record<CellIssueCode, string> = {
 
 const CODE_ORDER: CellIssueCode[] = [
   "invalid_email",
+  "email_typo",
   "invalid_phone",
   "invalid_date",
   "ambiguous_date",

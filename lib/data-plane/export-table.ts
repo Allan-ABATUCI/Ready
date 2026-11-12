@@ -5,7 +5,7 @@ import { readDate } from "./dates";
 import { dateColumns } from "./issues";
 import type { MergeResult } from "./merge";
 import { toE164 } from "./phone";
-import type { CsvRow, ProcessResult } from "./types";
+import type { CellIssueCode, CsvRow, ProcessResult } from "./types";
 import { normalizeEmail } from "./validate";
 
 export interface ExportOptions {
@@ -15,6 +15,12 @@ export interface ExportOptions {
   lowercaseEmails: boolean;
   /** Apply the capitalization suggestions from the issues pass. */
   fixCase: boolean;
+  /**
+   * Apply the email domain typo suggestions ("gmial.com" → "gmail.com"). Off by
+   * default: changing an address is riskier than fixing its case, and the
+   * domain may be real.
+   */
+  fixEmailTypos: boolean;
   /**
    * Rewrite the phone column in E.164 ("+33612345678"), reading national numbers
    * with the analysis' default country; values that can't be converted are kept.
@@ -33,19 +39,28 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   trim: true,
   lowercaseEmails: true,
   fixCase: true,
+  fixEmailTypos: false,
   normalizePhones: true,
   isoDates: true,
 };
 
 /**
- * What cleaning did to a cell. The first five change the value; the `_unchanged`
+ * What cleaning did to a cell. The first six change the value; the `_unchanged`
  * kinds mark phones and dates that couldn't be converted and were kept as written.
  */
 export type ChangeKind =
-  "case_fixed" | "trimmed" | "email_lowercased" | "phone_e164" | "date_iso" | "phone_unchanged" | "date_unchanged";
+  | "case_fixed"
+  | "email_typo_fixed"
+  | "trimmed"
+  | "email_lowercased"
+  | "phone_e164"
+  | "date_iso"
+  | "phone_unchanged"
+  | "date_unchanged";
 
 export const CHANGE_KINDS: ChangeKind[] = [
   "case_fixed",
+  "email_typo_fixed",
   "trimmed",
   "email_lowercased",
   "phone_e164",
@@ -107,17 +122,22 @@ export function buildExportTable(
   options: ExportOptions,
   cellRows = 0,
 ): ExportTable {
-  // Case fixes keyed by column, then by the trimmed NFC original value. Keyed by
-  // value rather than row so they also apply to values carried over by a merge.
-  const fixes = new Map<number, Map<string, string>>();
-  if (options.fixCase) {
-    for (const i of cellIssues) {
-      if (i.code !== "inconsistent_case" || i.suggestion === undefined) continue;
-      const original = (parsed.rows[i.row]?.[i.col] ?? "").trim().normalize("NFC");
-      let byValue = fixes.get(i.col);
-      if (!byValue) fixes.set(i.col, (byValue = new Map()));
-      byValue.set(original, i.suggestion);
-    }
+  // Suggested fixes the options turn on, keyed by column, then by the trimmed
+  // NFC original value. Keyed by value rather than row so they also apply to
+  // values carried over by a merge. A cell has at most one suggestion: case
+  // issues are never raised on email columns.
+  const fixKinds: Partial<Record<CellIssueCode, ChangeKind>> = {
+    ...(options.fixCase && { inconsistent_case: "case_fixed" }),
+    ...(options.fixEmailTypos && { email_typo: "email_typo_fixed" }),
+  };
+  const fixes = new Map<number, Map<string, { value: string; kind: ChangeKind }>>();
+  for (const i of cellIssues) {
+    const kind = fixKinds[i.code];
+    if (kind === undefined || i.suggestion === undefined) continue;
+    const original = (parsed.rows[i.row]?.[i.col] ?? "").trim().normalize("NFC");
+    let byValue = fixes.get(i.col);
+    if (!byValue) fixes.set(i.col, (byValue = new Map()));
+    byValue.set(original, { value: i.suggestion, kind });
   }
   const emailCol = roles.email;
   const phoneCol = options.normalizePhones ? roles.phone : undefined;
@@ -132,8 +152,8 @@ export function buildExportTable(
       const kinds: ChangeKind[] = [];
       const fix = fixes.get(col)?.get(v.trim().normalize("NFC"));
       if (fix !== undefined) {
-        v = fix;
-        kinds.push("case_fixed");
+        v = fix.value;
+        kinds.push(fix.kind);
       }
       if (options.trim && v !== v.trim()) {
         v = v.trim();

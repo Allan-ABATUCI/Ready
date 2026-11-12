@@ -110,4 +110,14 @@ describe("findCellIssues", () => {
       expect(issuesFor(dates, "ymd").map((i) => i.row)).toEqual([0, 1, 3]);
     });
   });
+
+  describe("email typos", () => {
+    it("suggests a corrected address for likely domain typos, keeping the local part", () => {
+      expect(issuesFor("Email\nAvery.Example@gmial.com\nbo@ymail.com\nzoë@outlok.fr\nbad@@gmial.com\n")).toEqual([
+        { row: 0, col: 0, code: "email_typo", suggestion: "Avery.Example@gmail.com" },
+        { row: 2, col: 0, code: "email_typo", suggestion: "zoë@outlook.fr" },
+        { row: 3, col: 0, code: "invalid_email" }, // invalid first; no typo hint on top
+      ]);
+    });
+  });
 });

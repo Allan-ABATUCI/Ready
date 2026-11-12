@@ -1,23 +1,47 @@
 import "client-only";
+import { logEvent } from "@/lib/diagnostics";
 import type { ColumnRoles } from "./columns";
 import type { Analysis, ColumnProfile, ParsedCsv, ProcessResult, Stage } from "./types";
 import type { WorkerRequest, WorkerResponse } from "./worker/protocol";
 
 type Done = Extract<WorkerResponse, { type: "processed" | "analyzed" }>;
 
+/**
+ * Handle one message from the worker: progress goes to `onStage`, timings to
+ * diagnostics. Returns the final message, or null while work is still going.
+ * Throws `Error(code)` for a worker error, so callers can map it to a known code.
+ */
+export function receive(msg: WorkerResponse, onStage?: (stage: Stage) => void): Done | null {
+  switch (msg.type) {
+    case "progress":
+      onStage?.(msg.stage);
+      return null;
+    case "timing":
+      logEvent({ kind: "stage", stage: msg.stage, ms: msg.ms });
+      return null;
+    case "error":
+      throw new Error(msg.code);
+    default:
+      return msg;
+  }
+}
+
 /** One request, one fresh worker: no state survives between files. */
 function runInWorker(request: WorkerRequest, onStage?: (stage: Stage) => void): Promise<Done> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./worker/processing.worker.ts", import.meta.url), { type: "module" });
     worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
-      const msg = e.data;
-      if (msg.type === "progress") {
-        onStage?.(msg.stage);
+      let done: Done | null;
+      try {
+        done = receive(e.data, onStage);
+      } catch (err) {
+        worker.terminate();
+        reject(err);
         return;
       }
+      if (!done) return;
       worker.terminate();
-      if (msg.type === "error") reject(new Error(msg.code));
-      else resolve(msg);
+      resolve(done);
     };
     worker.onerror = () => {
       worker.terminate();

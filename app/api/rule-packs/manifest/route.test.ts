@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { captureRequestLog } from "@/tests/support/request-log";
 
 const get = vi.fn();
 vi.mock("@vercel/edge-config", () => ({ createClient: vi.fn(() => ({ get })) }));
@@ -9,7 +10,10 @@ const { DEFAULT_MANIFEST, EDGE_CONFIG_KEY } = await import("@/lib/control-plane/
 
 describe("GET /api/rule-packs/manifest", () => {
   beforeEach(() => get.mockReset());
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
 
   it("serves the bundled default when Edge Config is not configured", async () => {
     vi.stubEnv("EDGE_CONFIG", "");
@@ -33,5 +37,19 @@ describe("GET /api/rule-packs/manifest", () => {
     expect(await (await GET()).json()).toEqual(DEFAULT_MANIFEST);
     get.mockRejectedValueOnce(new Error("down"));
     expect(await (await GET()).json()).toEqual(DEFAULT_MANIFEST);
+  });
+
+  it("logs why it fell back, but not the connection string or the error", async () => {
+    vi.stubEnv("EDGE_CONFIG", "https://edge-config.example.test/ecfg_test?token=SECRET-TOKEN");
+    const log = captureRequestLog();
+    get.mockResolvedValueOnce({ packs: "nope" });
+    await GET();
+    get.mockRejectedValueOnce(new Error("down: https://edge-config.example.test/ecfg_test?token=SECRET-TOKEN"));
+    await GET();
+    expect(log.entries()).toMatchObject([
+      { route: "rule_pack_manifest", status: 200, code: "edge_config_invalid" },
+      { route: "rule_pack_manifest", status: 200, code: "edge_config_failed" },
+    ]);
+    expect(log.raw()).not.toContain("SECRET-TOKEN");
   });
 });

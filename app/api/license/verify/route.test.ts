@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { captureRequestLog } from "@/tests/support/request-log";
 import { POST } from "./route";
 
 const call = (body: string) =>
@@ -12,6 +13,8 @@ const call = (body: string) =>
   );
 
 describe("POST /api/license/verify", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it("rejects malformed keys", async () => {
     const res = await call(JSON.stringify({ licenseKey: "nope" }));
     expect(res.status).toBe(400);
@@ -35,5 +38,16 @@ describe("POST /api/license/verify", () => {
 
   it("refuses invalid JSON", async () => {
     expect((await call("{")).status).toBe(400);
+  });
+
+  it("logs the outcome but never the license key", async () => {
+    const log = captureRequestLog();
+    await call(JSON.stringify({ licenseKey: "RDY-QZ7XA-12345-FGHIJ-67890" }));
+    await call(JSON.stringify({ licenseKey: "QZ7X-not-a-key" }));
+    expect(log.entries()).toMatchObject([
+      { route: "license_verify", status: 501, code: "not_implemented" },
+      { route: "license_verify", status: 400, code: "malformed" },
+    ]);
+    expect(log.raw()).not.toContain("QZ7X");
   });
 });

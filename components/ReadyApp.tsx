@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { fetchRulePackManifest } from "@/lib/control-plane-client/rule-packs";
 import type { KeyColumn } from "@/lib/data-plane/columns";
 import { analyzeInWorker, processFileInWorker } from "@/lib/data-plane/run";
+import { logEvent, toErrorCode } from "@/lib/diagnostics";
 import type { Stage } from "@/lib/data-plane/types";
 import { loadVerifiedRulePack } from "@/lib/rule-packs/load";
 import { useReadyStore } from "@/lib/state/store";
@@ -52,7 +53,10 @@ export function ReadyApp() {
   } = useReadyStore();
 
   useEffect(() => {
-    void fetchRulePackManifest().then(setManifest);
+    void fetchRulePackManifest().then((manifest) => {
+      logEvent({ kind: "manifest", status: manifest ? "loaded" : "failed" });
+      setManifest(manifest);
+    });
   }, [setManifest]);
 
   // Only the CRM identifier the user picked is sent; the pack is verified before use.
@@ -64,7 +68,8 @@ export function ReadyApp() {
     startProcessing(file.name);
     try {
       finishProcessing(await processFileInWorker(file, setStage));
-    } catch {
+    } catch (e) {
+      logEvent({ kind: "error", code: toErrorCode(e) });
       failProcessing();
     }
   };
@@ -81,9 +86,10 @@ export function ReadyApp() {
     if (!roles || !result) return;
     try {
       finishAnalysis(roles, await analyzeInWorker(result.parsed, result.profile, roles, setStage));
-    } catch {
+    } catch (e) {
       // The analysis is pure code over data that already parsed, so this is not
       // expected; fail visibly rather than show results for the old roles.
+      logEvent({ kind: "error", code: toErrorCode(e) });
       failProcessing();
     }
   };

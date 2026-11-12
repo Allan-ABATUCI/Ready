@@ -9,6 +9,8 @@ export type WorkerRequest =
 /** Messages carry stage names and codes only, never counts or values from the file. */
 export type WorkerResponse =
   | { type: "progress"; stage: Stage }
+  /** How long a stage took, for diagnostics. */
+  | { type: "timing"; stage: Stage; ms: number }
   | { type: "processed"; result: ProcessResult }
   | { type: "analyzed"; analysis: Analysis }
   | { type: "error"; code: "parse_failed" | "analyze_failed" };

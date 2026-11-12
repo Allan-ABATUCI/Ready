@@ -182,6 +182,13 @@ e2e/                     Playwright tests (privacy.spec.ts enforces the privacy 
 tests/fixtures/          Synthetic CSV fixtures
 ```
 
+### Debugging
+
+Diagnostics never contain file data: no cell values, column names, file names, row counts or error messages, only fixed codes and timings.
+
+- **Browser** (`lib/diagnostics.ts`): stage timings, error codes and rule-pack results go to `console.debug` as `[ready] {...}` lines. They're on in development. In production, run `localStorage.setItem("ready:debug", "1")` in the console and reload. Nothing is sent over the network.
+- **Server** (`lib/control-plane/log.ts`): each API request writes one JSON line (`route`, `status`, `code`, `ms`) to stdout, which Vercel captures. License keys, bodies, headers and Stripe payloads are never logged.
+
 ### Rule packs
 
 Each CRM's required fields and formats live in `rule-packs/src/<crm>.json`. The API serves the signed copies in `rule-packs/signed/`, and the browser rejects any pack whose signature doesn't verify against `lib/rule-packs/public-key.ts`.

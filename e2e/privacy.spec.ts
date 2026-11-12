@@ -78,8 +78,13 @@ async function capture(req: Request): Promise<Captured> {
 test("processing and exporting a file sends no file data over the network", async ({ page, context, baseURL }) => {
   const pending: Promise<Captured>[] = [];
   const sockets: string[] = [];
+  const consoleLines: string[] = [];
   context.on("request", (req) => pending.push(capture(req)));
   page.on("websocket", (ws) => sockets.push(ws.url()));
+  page.on("console", (msg) => consoleLines.push(msg.text()));
+  page.on("pageerror", (err) => consoleLines.push(`${err.name}: ${err.message}`));
+  // Turn on the production debug log (lib/diagnostics.ts), so its output is checked too.
+  await context.addInitScript(() => localStorage.setItem("ready:debug", "1"));
 
   const manifestLoaded = page.waitForResponse((r) => r.url().endsWith("/api/rule-packs/manifest"));
   await page.goto("/");
@@ -137,6 +142,14 @@ test("processing and exporting a file sends no file data over the network", asyn
   // The only non-GET requests allowed are explicit control-plane endpoints.
   const nonGet = requests.filter((r) => r.method !== "GET");
   expect(nonGet.map((r) => `${r.method} ${r.url}`)).toEqual([]);
+
+  // The debug log was on (sanity) and holds no sentinel either.
+  expect(consoleLines.some((l) => l.startsWith('[ready] {"kind":"stage"'))).toBe(true);
+  expect(consoleLines.some((l) => l.includes('"kind":"rule_pack"'))).toBe(true);
+  const consoleLeaks = consoleLines.flatMap((l) =>
+    NEEDLES.filter((n) => l.toLowerCase().includes(n)).map((n) => `console: ${l} contains ${JSON.stringify(n)}`),
+  );
+  expect(consoleLeaks).toEqual([]);
 });
 
 test("the production CSP blocks third-party connections", async ({ page }) => {

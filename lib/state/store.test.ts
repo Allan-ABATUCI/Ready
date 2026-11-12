@@ -66,6 +66,23 @@ describe("useReadyStore", () => {
     });
   });
 
+  it("tracks rule-pack loading and ignores results for a CRM that is no longer selected", () => {
+    const s = useReadyStore.getState();
+    const pack = { crm: "hubspot" as const, version: "1.0.0", requiredFields: ["Email"], formats: {} };
+    s.setCrm("hubspot");
+    expect(useReadyStore.getState()).toMatchObject({ rulePack: null, rulePackStatus: "loading" });
+    s.setCrm("salesforce");
+    s.setRulePack("hubspot", pack);
+    expect(useReadyStore.getState()).toMatchObject({ rulePack: null, rulePackStatus: "loading" });
+    s.setRulePack("salesforce", null);
+    expect(useReadyStore.getState().rulePackStatus).toBe("failed");
+    s.setCrm("hubspot");
+    s.setRulePack("hubspot", pack);
+    expect(useReadyStore.getState()).toMatchObject({ rulePack: pack, rulePackStatus: "verified" });
+    s.reset();
+    expect(useReadyStore.getState()).toMatchObject({ rulePack: null, rulePackStatus: "idle" });
+  });
+
   it("does not persist anything to web storage", () => {
     useReadyStore.getState().startProcessing("secret-name.csv");
     expect(window.localStorage.length).toBe(0);

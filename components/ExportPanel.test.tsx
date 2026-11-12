@@ -70,3 +70,41 @@ describe("ExportPanel", () => {
     );
   });
 });
+
+describe("ExportPanel rule-pack checks", () => {
+  const base = {
+    result: processCsv("Full Name,Email\nAvery Example,avery@example.test\nBo,not-an-email\n"),
+    decisions: {},
+    options: DEFAULT_EXPORT_OPTIONS,
+    onCrm: () => {},
+    onOption: () => {},
+  };
+
+  it("lists missing required fields and bad formats from a verified pack", () => {
+    const pack = {
+      crm: "salesforce" as const,
+      version: "1.0.0",
+      requiredFields: ["Last Name", "Company"],
+      formats: { Email: "email" as const },
+    };
+    render(<ExportPanel {...base} crm="salesforce" rulePack={pack} rulePackStatus="verified" />);
+    const rules = screen.getByTestId("crm-rules");
+    expect(rules).toHaveTextContent("Checked against Salesforce rules v1.0.0");
+    expect(rules).toHaveTextContent("Required field is empty: Last Name (1 row)");
+    expect(rules).toHaveTextContent("No column for required field: Company");
+    expect(rules).toHaveTextContent("Wrong format: Email (1 row)");
+  });
+
+  it("ignores a pack for a different CRM", () => {
+    const pack = { crm: "hubspot" as const, version: "1.0.0", requiredFields: ["Nope"], formats: {} };
+    render(<ExportPanel {...base} crm="pipedrive" rulePack={pack} rulePackStatus="loading" />);
+    expect(screen.getByTestId("crm-rules")).toHaveTextContent("Loading Pipedrive import rules");
+    expect(screen.getByTestId("crm-rules")).not.toHaveTextContent("Nope");
+  });
+
+  it("says checks are off when verification failed, but still allows download", () => {
+    render(<ExportPanel {...base} crm="hubspot" rulePack={null} rulePackStatus="failed" />);
+    expect(screen.getByTestId("crm-rules")).toHaveTextContent("Couldn't verify the HubSpot import rules");
+    expect(screen.getByRole("button", { name: "Download CSV" })).toBeEnabled();
+  });
+});

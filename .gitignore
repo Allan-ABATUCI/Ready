@@ -23,3 +23,6 @@ blob-report/
 # misc
 .DS_Store
 npm-debug.log*
+
+# rule-pack signing keys (never commit)
+.keys/

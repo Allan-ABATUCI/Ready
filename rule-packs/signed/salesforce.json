@@ -1,0 +1,4 @@
+{
+  "payload": "{\"crm\":\"salesforce\",\"version\":\"1.0.0\",\"requiredFields\":[\"Last Name\",\"Company\"],\"formats\":{\"Email\":\"email\",\"Phone\":\"phone\"}}",
+  "signature": "eRDVHDh3kExMIkZVVIw4Y3YebS2FgVpwMyAb14H//sBnTTaM6ZwJDNgw20YFZU4Ws3Rhbw2AMo37xqLDf4IFbA=="
+}

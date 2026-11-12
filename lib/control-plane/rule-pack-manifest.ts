@@ -6,9 +6,9 @@ export const EDGE_CONFIG_KEY = "rulePackManifest";
 
 export const DEFAULT_MANIFEST: RulePackManifest = {
   packs: [
-    { crm: "hubspot", version: "0.0.0" },
-    { crm: "salesforce", version: "0.0.0" },
-    { crm: "pipedrive", version: "0.0.0" },
+    { crm: "hubspot", version: "1.0.0" },
+    { crm: "salesforce", version: "1.0.0" },
+    { crm: "pipedrive", version: "1.0.0" },
   ],
 };
 

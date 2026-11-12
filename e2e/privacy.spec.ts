@@ -94,7 +94,10 @@ test("processing and exporting a file sends no file data over the network", asyn
   await expect(page.getByTestId("merge-preview")).toContainText("Quillon Zephyrine");
 
   await page.getByRole("button", { name: "Merge", exact: true }).click();
+  const packLoaded = page.waitForResponse((r) => r.url().endsWith("/api/rule-packs/salesforce"));
   await page.getByLabel("Salesforce").check();
+  await packLoaded;
+  await expect(page.getByTestId("crm-rules")).toContainText("Checked against Salesforce rules");
 
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download CSV" }).click();
@@ -107,6 +110,13 @@ test("processing and exporting a file sends no file data over the network", asyn
 
   // Sanity: interception works and saw the control-plane call we expect.
   expect(requests.some((r) => r.url.endsWith("/api/rule-packs/manifest"))).toBe(true);
+
+  // Rule-pack calls carry only the user-chosen CRM identifier: exact path, no query, GET.
+  const packCalls = requests.filter((r) => new URL(r.url).pathname.startsWith("/api/rule-packs/"));
+  expect(packCalls.map((r) => `${r.method} ${new URL(r.url).pathname}${new URL(r.url).search}`).sort()).toEqual([
+    "GET /api/rule-packs/manifest",
+    "GET /api/rule-packs/salesforce",
+  ]);
 
   // Nothing leaves for a third-party origin.
   const origin = new URL(baseURL!).origin;

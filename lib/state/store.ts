@@ -4,7 +4,9 @@ import { create } from "zustand";
 import { isExactMatch, pairKey, type Decisions, type FieldSide, type PairAction } from "@/lib/data-plane/merge";
 import { DEFAULT_EXPORT_OPTIONS, type ExportOptions } from "@/lib/data-plane/export-table";
 import type { ProcessResult } from "@/lib/data-plane/types";
-import type { Crm, RulePackManifest } from "@/lib/rule-packs/types";
+import type { Crm, RulePack, RulePackManifest } from "@/lib/rule-packs/types";
+
+export type RulePackStatus = "idle" | "loading" | "verified" | "failed";
 
 export type Status = "idle" | "processing" | "ready" | "error";
 
@@ -22,6 +24,9 @@ export interface ReadyState {
   /** Destination CRM picked by the user; export is disabled until set. */
   crm: Crm | null;
   exportOptions: ExportOptions;
+  /** Verified rule pack for `crm`; never set from an unverified pack. */
+  rulePack: RulePack | null;
+  rulePackStatus: RulePackStatus;
   manifest: RulePackManifest | null;
 
   startProcessing: (fileName: string) => void;
@@ -36,6 +41,8 @@ export interface ReadyState {
   mergeAllExact: () => void;
   setCrm: (crm: Crm) => void;
   setExportOption: (key: keyof ExportOptions, value: boolean) => void;
+  /** Store the result of loading `crm`'s pack; ignored if the user has since picked another CRM. */
+  setRulePack: (crm: Crm, pack: RulePack | null) => void;
   setManifest: (manifest: RulePackManifest | null) => void;
   reset: () => void;
 }
@@ -48,6 +55,8 @@ const initial = {
   decisions: {} as Decisions,
   crm: null as Crm | null,
   exportOptions: DEFAULT_EXPORT_OPTIONS,
+  rulePack: null as RulePack | null,
+  rulePackStatus: "idle" as RulePackStatus,
 };
 
 export const useReadyStore = create<ReadyState>()((set, get) => {
@@ -86,7 +95,13 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
       }
       set({ decisions: next });
     },
-    setCrm: (crm) => set({ crm }),
+    setCrm: (crm) => {
+      if (get().crm !== crm) set({ crm, rulePack: null, rulePackStatus: "loading" });
+    },
+    setRulePack: (crm, pack) => {
+      if (get().crm !== crm) return;
+      set({ rulePack: pack, rulePackStatus: pack ? "verified" : "failed" });
+    },
     setExportOption: (key, value) => set({ exportOptions: { ...get().exportOptions, [key]: value } }),
     setManifest: (manifest) => set({ manifest }),
     reset: () => set(initial),

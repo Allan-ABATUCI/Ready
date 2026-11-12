@@ -122,10 +122,11 @@ Every network call the app makes must be listed here.
 
 **Browser → network** (all browser calls live in `lib/control-plane-client/`; ESLint blocks `fetch`/XHR/WebSocket/beacons elsewhere, and the production CSP sets `connect-src 'self'`):
 
-| Call                                                         | Destination                                  | Payload                                                                                          | Test                                                                                                  |
-| ------------------------------------------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| Rule-pack manifest                                           | `GET /api/rule-packs/manifest` (same origin) | None: no query string, no body, `credentials: "omit"`. Response: `{ packs: [{ crm, version }] }` | `e2e/privacy.spec.ts`                                                                                 |
-| License verify _(endpoint exists, not yet called by the UI)_ | `POST /api/license/verify` (same origin)     | `{ "licenseKey": string }`, exactly one field, ≤ 256 bytes. Anything else gets a 400 or 413      | `app/api/license/verify/route.test.ts`; add the call to `e2e/privacy.spec.ts` when the UI wires it up |
+| Call                                                         | Destination                                                               | Payload                                                                                                                                                                                                                   | Test                                                                                                           |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Rule-pack manifest                                           | `GET /api/rule-packs/manifest` (same origin)                              | None: no query string, no body, `credentials: "omit"`. Response: `{ packs: [{ crm, version }] }`                                                                                                                          | `e2e/privacy.spec.ts`                                                                                          |
+| Signed rule pack                                             | `GET /api/rule-packs/<crm>` (same origin), sent when the user picks a CRM | Only the CRM identifier in the path (`hubspot`, `salesforce` or `pipedrive`), chosen by the user. No query string, no body, `credentials: "omit"`. Response: `{ payload, signature }`, verified in the browser before use | `e2e/privacy.spec.ts`, `lib/control-plane-client/rule-packs.test.ts`, `app/api/rule-packs/[crm]/route.test.ts` |
+| License verify _(endpoint exists, not yet called by the UI)_ | `POST /api/license/verify` (same origin)                                  | `{ "licenseKey": string }`, exactly one field, ≤ 256 bytes. Anything else gets a 400 or 413                                                                                                                               | `app/api/license/verify/route.test.ts`; add the call to `e2e/privacy.spec.ts` when the UI wires it up          |
 
 **Server → network** (Next.js API routes on Vercel; never handle file data, and ESLint blocks them from importing `lib/data-plane/`):
 
@@ -171,11 +172,25 @@ components/              Client components (FileDrop, ProfileSummary, DuplicateR
 lib/data-plane/          Browser-only CSV parsing, profiling, validation, dedupe, export, Web Worker
 lib/control-plane/       Server-only helpers for the API routes
 lib/control-plane-client/ The only browser module allowed to make network requests
-lib/rule-packs/          Rule-pack types and signature verification (ECDSA P-256, fails closed)
+lib/rule-packs/          Rule-pack types, public key, signature verification (ECDSA P-256, fails closed)
+rule-packs/              Rule-pack sources (src/) and signed output (signed/), see "Rule packs" below
+scripts/rule-packs.mjs   Key generation and signing for rule packs
 lib/state/               Zustand store (in-memory only, never persisted)
 e2e/                     Playwright tests (privacy.spec.ts enforces the privacy invariant)
 tests/fixtures/          Synthetic CSV fixtures
 ```
+
+### Rule packs
+
+Each CRM's required fields and formats live in `rule-packs/src/<crm>.json`. The API serves the signed copies in `rule-packs/signed/`, and the browser rejects any pack whose signature doesn't verify against `lib/rule-packs/public-key.ts`.
+
+To change a pack, edit the source, bump its `version` (and the matching entry in `DEFAULT_MANIFEST`), then re-sign:
+
+```bash
+node scripts/rule-packs.mjs sign      # needs .keys/rule-pack.private.jwk or RULE_PACK_PRIVATE_KEY
+```
+
+`lib/rule-packs/bundled.test.ts` fails if a signed pack is stale or doesn't verify. The private key is never committed (`.keys/` is gitignored). To rotate the key, run `node scripts/rule-packs.mjs keygen`, paste the printed public JWK into `public-key.ts`, and re-sign.
 
 ## License
 

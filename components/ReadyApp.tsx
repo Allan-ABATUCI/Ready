@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { fetchRulePackManifest } from "@/lib/control-plane-client/rule-packs";
 import { processFileInWorker } from "@/lib/data-plane/run";
+import { loadVerifiedRulePack } from "@/lib/rule-packs/load";
 import { useReadyStore } from "@/lib/state/store";
 import { DuplicateReview } from "./DuplicateReview";
 import { ExportPanel } from "./ExportPanel";
@@ -11,13 +12,19 @@ import { IssuesSummary } from "./IssuesSummary";
 import { ProfileSummary } from "./ProfileSummary";
 
 export function ReadyApp() {
-  const { status, result, selectedCandidate, decisions, crm, exportOptions, manifest } = useReadyStore();
+  const { status, result, selectedCandidate, decisions, crm, exportOptions, rulePack, rulePackStatus, manifest } =
+    useReadyStore();
   const { startProcessing, finishProcessing, failProcessing, selectCandidate, setManifest, reset } = useReadyStore();
-  const { decide, chooseField, mergeAllExact, setCrm, setExportOption } = useReadyStore();
+  const { decide, chooseField, mergeAllExact, setCrm, setExportOption, setRulePack } = useReadyStore();
 
   useEffect(() => {
     void fetchRulePackManifest().then(setManifest);
   }, [setManifest]);
+
+  // Only the CRM identifier the user picked is sent; the pack is verified before use.
+  useEffect(() => {
+    if (crm) void loadVerifiedRulePack(crm).then((pack) => setRulePack(crm, pack));
+  }, [crm, setRulePack]);
 
   const onFile = async (file: File) => {
     startProcessing(file.name);
@@ -64,6 +71,8 @@ export function ReadyApp() {
             options={exportOptions}
             onCrm={setCrm}
             onOption={setExportOption}
+            rulePack={rulePack}
+            rulePackStatus={rulePackStatus}
           />
           <div className="flex gap-3">
             <button type="button" className="rounded-lg border px-4 py-2" onClick={reset}>

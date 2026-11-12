@@ -1,4 +1,5 @@
 import "client-only";
+import type { FieldFormat } from "@/lib/rule-packs/types";
 
 // Deliberately simple and local. No verification services — see CLAUDE.md.
 const EMAIL_RE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[^\s@.]{2,}$/u;
@@ -34,3 +35,10 @@ export function isIsoDate(value: string): boolean {
   const daysInMonth = new Date(Date.UTC(y, mo, 0)).getUTCDate();
   return d <= daysInMonth;
 }
+
+/** The single format → validator table shared by issue detection and rule-pack checks. */
+export const FORMAT_VALIDATORS: Record<FieldFormat, (value: string) => boolean> = {
+  email: isValidEmail,
+  phone: isValidPhone,
+  date: isIsoDate,
+};

@@ -1,13 +1,17 @@
 import type { Crm, RulePackManifest, SignedRulePack } from "@/lib/rule-packs/types";
 import { isRulePackManifest } from "@/lib/rule-packs/types";
 
-/** GET the current rule-pack manifest. No query string, no body, no credentials. */
-export async function fetchRulePackManifest(): Promise<RulePackManifest | null> {
+/**
+ * The one way this module talks to the control plane: a same-origin GET with no
+ * query string, no body and no credentials. Returns null on any network error,
+ * non-2xx status or unexpected response shape, so callers never see partial data.
+ */
+async function getJson<T>(path: string, isValid: (v: unknown) => v is T): Promise<T | null> {
   try {
-    const res = await fetch("/api/rule-packs/manifest", { method: "GET", credentials: "omit", cache: "no-store" });
+    const res = await fetch(path, { method: "GET", credentials: "omit", cache: "no-store" });
     if (!res.ok) return null;
     const json: unknown = await res.json();
-    return isRulePackManifest(json) ? json : null;
+    return isValid(json) ? json : null;
   } catch {
     return null;
   }
@@ -22,22 +26,16 @@ function isSignedRulePack(v: unknown): v is SignedRulePack {
   );
 }
 
+/** GET the current rule-pack manifest. */
+export function fetchRulePackManifest(): Promise<RulePackManifest | null> {
+  return getJson("/api/rule-packs/manifest", isRulePackManifest);
+}
+
 /**
  * GET the signed rule pack for one CRM. The CRM identifier (chosen by the user,
- * never derived from the file) is the only thing sent. No query, body or credentials.
+ * never derived from the file) is the only thing sent.
  * The result is unverified: callers must run `verifyRulePack` before using it.
  */
-export async function fetchSignedRulePack(crm: Crm): Promise<SignedRulePack | null> {
-  try {
-    const res = await fetch(`/api/rule-packs/${encodeURIComponent(crm)}`, {
-      method: "GET",
-      credentials: "omit",
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    const json: unknown = await res.json();
-    return isSignedRulePack(json) ? json : null;
-  } catch {
-    return null;
-  }
+export function fetchSignedRulePack(crm: Crm): Promise<SignedRulePack | null> {
+  return getJson(`/api/rule-packs/${encodeURIComponent(crm)}`, isSignedRulePack);
 }

@@ -15,8 +15,6 @@ export interface ParsedCsv {
   issues: CsvIssue[];
 }
 
-export type FieldFormatCheck = "email" | "phone" | "date";
-
 export type ValuePattern = "empty" | "email" | "phone" | "date" | "number" | "text";
 
 export interface ColumnProfile {

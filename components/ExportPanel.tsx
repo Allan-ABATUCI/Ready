@@ -7,8 +7,8 @@ import { buildExportTable, type ExportOptions } from "@/lib/data-plane/export-ta
 import { applyDecisions, type Decisions } from "@/lib/data-plane/merge";
 import { checkRequirements, type RequirementCode } from "@/lib/data-plane/requirements";
 import type { ProcessResult } from "@/lib/data-plane/types";
-import { CRMS, type Crm, type RulePack } from "@/lib/rule-packs/types";
-import type { RulePackStatus } from "@/lib/state/store";
+import { groupBy } from "@/lib/group";
+import { CRMS, type Crm, type RulePack, type RulePackStatus } from "@/lib/rule-packs/types";
 
 const REQUIREMENT_LABELS: Record<RequirementCode, string> = {
   missing_column: "No column for required field",
@@ -58,14 +58,12 @@ export function ExportPanel({
   const activePack = rulePack && rulePack.crm === crm ? rulePack : null;
   const requirementGroups = useMemo(() => {
     if (!table || !activePack) return null;
-    const groups: { key: string; field: string; code: RequirementCode; count: number }[] = [];
-    for (const i of checkRequirements(table, activePack)) {
-      const key = `${i.code}:${i.field}`;
-      const g = groups.find((x) => x.key === key);
-      if (g) g.count++;
-      else groups.push({ key, field: i.field, code: i.code, count: 1 });
-    }
-    return groups;
+    return groupBy(checkRequirements(table, activePack), (i) => `${i.code}:${i.field}`).map(({ key, items }) => ({
+      key,
+      field: items[0]!.field,
+      code: items[0]!.code,
+      count: items.length,
+    }));
   }, [table, activePack]);
 
   return (

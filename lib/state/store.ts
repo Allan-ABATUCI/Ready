@@ -4,9 +4,7 @@ import { create } from "zustand";
 import { isExactMatch, pairKey, type Decisions, type FieldSide, type PairAction } from "@/lib/data-plane/merge";
 import { DEFAULT_EXPORT_OPTIONS, type ExportOptions } from "@/lib/data-plane/export-table";
 import type { ProcessResult } from "@/lib/data-plane/types";
-import type { Crm, RulePack, RulePackManifest } from "@/lib/rule-packs/types";
-
-export type RulePackStatus = "idle" | "loading" | "verified" | "failed";
+import type { Crm, RulePack, RulePackManifest, RulePackStatus } from "@/lib/rule-packs/types";
 
 export type Status = "idle" | "processing" | "ready" | "error";
 

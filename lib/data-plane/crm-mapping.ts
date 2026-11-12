@@ -1,6 +1,7 @@
 import "client-only";
 import type { Crm } from "@/lib/rule-packs/types";
 import { detectKeyColumns } from "./columns";
+import { joinName, splitName } from "./names";
 import type { CsvRow } from "./types";
 
 export const CRM_LABELS: Record<Crm, string> = {
@@ -51,12 +52,6 @@ export type ColumnSource =
 export interface OutputColumn {
   header: string;
   source: ColumnSource;
-}
-
-/** "Zoë  van der Berg" → ["Zoë", "van der Berg"]. Split at the first whitespace run. */
-export function splitName(full: string): [string, string] {
-  const m = /^(\S+)\s+(.*)$/su.exec(full.trim());
-  return m ? [m[1]!, m[2]!.trim()] : [full.trim(), ""];
 }
 
 /**
@@ -115,7 +110,7 @@ export function projectRow(row: CsvRow, columns: OutputColumn[]): CsvRow {
       case "lastName":
         return splitName(cell(s.index))[1];
       case "join":
-        return [cell(s.first).trim(), cell(s.last).trim()].filter(Boolean).join(" ");
+        return joinName(cell(s.first), cell(s.last));
     }
   });
 }

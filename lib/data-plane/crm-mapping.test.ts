@@ -1,14 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planColumns, projectRow, splitName } from "./crm-mapping";
-
-describe("splitName", () => {
-  it.each([
-    ["Zoë Müller", ["Zoë", "Müller"]],
-    ["  José  Núñez  García ", ["José", "Núñez  García"]],
-    ["Ångström", ["Ångström", ""]],
-    ["", ["", ""]],
-  ] as const)("%j → %j", (input, expected) => expect(splitName(input)).toEqual(expected));
-});
+import { planColumns, projectRow } from "./crm-mapping";
 
 describe("planColumns", () => {
   const headers = ["Full Name", "Email", "Phone", "Company", "Notes"];

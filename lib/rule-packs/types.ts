@@ -17,7 +17,8 @@ export function isRulePackManifest(v: unknown): v is RulePackManifest {
   );
 }
 
-export type FieldFormat = "email" | "phone" | "date";
+export const FIELD_FORMATS = ["email", "phone", "date"] as const;
+export type FieldFormat = (typeof FIELD_FORMATS)[number];
 
 export interface RulePack {
   crm: Crm;
@@ -25,6 +26,9 @@ export interface RulePack {
   requiredFields: string[];
   formats: Record<string, FieldFormat>;
 }
+
+/** Where the browser is in fetching + verifying the pack for the chosen CRM. */
+export type RulePackStatus = "idle" | "loading" | "verified" | "failed";
 
 /** Wire format: `payload` is the exact JSON string that was signed. */
 export interface SignedRulePack {

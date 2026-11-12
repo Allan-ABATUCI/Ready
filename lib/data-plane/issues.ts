@@ -1,12 +1,13 @@
 import "client-only";
+import type { FieldFormat } from "@/lib/rule-packs/types";
 import { detectKeyColumns, type KeyColumn } from "./columns";
-import type { CellIssue, CellIssueCode, ColumnProfile, FieldFormatCheck, ParsedCsv } from "./types";
-import { isIsoDate, isValidEmail, isValidPhone } from "./validate";
+import type { CellIssue, CellIssueCode, ColumnProfile, ParsedCsv } from "./types";
+import { FORMAT_VALIDATORS } from "./validate";
 
-const FORMAT_CHECKS: Record<FieldFormatCheck, { code: CellIssueCode; valid: (v: string) => boolean }> = {
-  email: { code: "invalid_email", valid: isValidEmail },
-  phone: { code: "invalid_phone", valid: isValidPhone },
-  date: { code: "invalid_date", valid: isIsoDate },
+const FORMAT_ISSUE: Record<FieldFormat, CellIssueCode> = {
+  email: "invalid_email",
+  phone: "invalid_phone",
+  date: "invalid_date",
 };
 
 /** Columns holding proper nouns, where ALL CAPS / all lower is itself a problem. */
@@ -44,9 +45,9 @@ export function titleCase(v: string): string {
   return out;
 }
 
-function formatColumns(parsed: ParsedCsv, profile: ColumnProfile[]): Map<number, FieldFormatCheck> {
+function formatColumns(parsed: ParsedCsv, profile: ColumnProfile[]): Map<number, FieldFormat> {
   const keys = detectKeyColumns(parsed.headers);
-  const out = new Map<number, FieldFormatCheck>();
+  const out = new Map<number, FieldFormat>();
   if (keys.email !== undefined) out.set(keys.email, "email");
   if (keys.phone !== undefined) out.set(keys.phone, "phone");
   for (const c of profile) {
@@ -115,10 +116,10 @@ export function findCellIssues(parsed: ParsedCsv, profile: ColumnProfile[]): Cel
   const formats = formatColumns(parsed, profile);
 
   for (const [col, format] of formats) {
-    const check = FORMAT_CHECKS[format];
+    const valid = FORMAT_VALIDATORS[format];
     parsed.rows.forEach((row, r) => {
       const value = (row[col] ?? "").trim();
-      if (value !== "" && !check.valid(value)) issues.push({ row: r, col, code: check.code });
+      if (value !== "" && !valid(value)) issues.push({ row: r, col, code: FORMAT_ISSUE[format] });
     });
   }
 

@@ -1,6 +1,7 @@
 import "client-only";
 import { token_sort_ratio, ratio, type FuzzballBaseOptions } from "fuzzball";
 import { detectKeyColumns } from "./columns";
+import { joinName } from "./names";
 import type { DuplicateCandidate, MatchField, ParsedCsv } from "./types";
 import { isValidEmail, normalizeEmail, normalizePhone } from "./validate";
 
@@ -30,9 +31,7 @@ function keyRows(parsed: ParsedCsv): Keyed[] {
     const email = cell(row, cols.email);
     const phone = normalizePhone(cell(row, cols.phone));
     const name =
-      cols.name !== undefined
-        ? cell(row, cols.name)
-        : [cell(row, cols.firstName), cell(row, cols.lastName)].filter(Boolean).join(" ");
+      cols.name !== undefined ? cell(row, cols.name) : joinName(cell(row, cols.firstName), cell(row, cols.lastName));
     return {
       email: isValidEmail(email) ? normalizeEmail(email) : "",
       phone: phone.replace("+", "").length >= 7 ? phone : "",

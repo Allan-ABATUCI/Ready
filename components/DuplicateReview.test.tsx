@@ -1,9 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState } from "react";
-import { describe, expect, it } from "vitest";
-import { isExactMatch, pairKey, type Decisions, type FieldSide, type PairAction } from "@/lib/data-plane/merge";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { DuplicateCandidate, ParsedCsv } from "@/lib/data-plane/types";
+import { useReadyStore } from "@/lib/state/store";
 import { DuplicateReview } from "./DuplicateReview";
 
 const parsed: ParsedCsv = {
@@ -23,39 +22,27 @@ const candidates: DuplicateCandidate[] = [
   { a: 2, b: 3, score: 91, matchedOn: ["name"] },
 ];
 
+/** Wires the component to the real store, so tests exercise the app's decision logic. */
 function Harness() {
-  const [selected, setSelected] = useState(0);
-  const [decisions, setDecisions] = useState<Decisions>({});
-  const decide = (i: number, action: PairAction) =>
-    setDecisions((d) => ({
-      ...d,
-      [pairKey(candidates[i]!)]: { action, fields: d[pairKey(candidates[i]!)]?.fields ?? {} },
-    }));
-  const choose = (i: number, col: number, side: FieldSide) =>
-    setDecisions((d) => {
-      const k = pairKey(candidates[i]!);
-      return { ...d, [k]: { action: "merge", fields: { ...d[k]?.fields, [col]: side } } };
-    });
-  const mergeAll = () =>
-    setDecisions((d) => {
-      const next = { ...d };
-      for (const c of candidates)
-        if (isExactMatch(c) && !next[pairKey(c)]) next[pairKey(c)] = { action: "merge", fields: {} };
-      return next;
-    });
+  const s = useReadyStore();
   return (
     <DuplicateReview
       parsed={parsed}
       candidates={candidates}
-      selected={selected}
-      onSelect={setSelected}
-      decisions={decisions}
-      onDecide={decide}
-      onChooseField={choose}
-      onMergeAllExact={mergeAll}
+      selected={s.selectedCandidate}
+      onSelect={s.selectCandidate}
+      decisions={s.decisions}
+      onDecide={s.decide}
+      onChooseField={s.chooseField}
+      onMergeAllExact={s.mergeAllExact}
     />
   );
 }
+
+beforeEach(() => {
+  useReadyStore.getState().reset();
+  useReadyStore.getState().finishProcessing({ parsed, profile: [], duplicates: candidates, cellIssues: [] });
+});
 
 describe("DuplicateReview", () => {
   it("records merge / keep decisions and tracks progress", async () => {

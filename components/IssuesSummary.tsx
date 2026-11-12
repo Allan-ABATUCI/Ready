@@ -1,6 +1,7 @@
 "use client";
 
 import type { CellIssue, CellIssueCode } from "@/lib/data-plane/types";
+import { groupBy } from "@/lib/group";
 
 const LABELS: Record<CellIssueCode, string> = {
   invalid_email: "Invalid email",
@@ -18,14 +19,15 @@ interface Group {
   issues: CellIssue[];
 }
 
-/** Group by (code, column) in a fixed order so the list never reshuffles. */
+/** Group by (code, column), ordered by CODE_ORDER then column, so the list never reshuffles. */
 export function groupIssues(issues: CellIssue[]): Group[] {
-  const groups: Group[] = [];
-  for (const code of CODE_ORDER) {
-    const cols = [...new Set(issues.filter((i) => i.code === code).map((i) => i.col))].sort((a, b) => a - b);
-    for (const col of cols) groups.push({ code, col, issues: issues.filter((i) => i.code === code && i.col === col) });
-  }
-  return groups;
+  const rank = (i: CellIssue) => CODE_ORDER.indexOf(i.code);
+  const sorted = [...issues].sort((x, y) => rank(x) - rank(y) || x.col - y.col || x.row - y.row);
+  return groupBy(sorted, (i) => `${i.code}:${i.col}`).map(({ items }) => ({
+    code: items[0]!.code,
+    col: items[0]!.col,
+    issues: items,
+  }));
 }
 
 export interface IssuesSummaryProps {

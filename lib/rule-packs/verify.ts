@@ -1,4 +1,4 @@
-import { isCrm, type FieldFormat, type RulePack, type SignedRulePack } from "./types";
+import { FIELD_FORMATS, isCrm, type FieldFormat, type RulePack, type SignedRulePack } from "./types";
 
 export class RulePackVerificationError extends Error {
   constructor(public readonly code: "missing_key" | "unsigned" | "bad_signature" | "malformed") {
@@ -8,7 +8,6 @@ export class RulePackVerificationError extends Error {
 }
 
 const ALGO = { name: "ECDSA", namedCurve: "P-256" } as const;
-const FORMATS: FieldFormat[] = ["email", "phone", "date"];
 
 function b64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   const bin = atob(b64);
@@ -27,7 +26,7 @@ function isRulePack(v: unknown): v is RulePack {
     p.requiredFields.every((f) => typeof f === "string") &&
     typeof p.formats === "object" &&
     p.formats !== null &&
-    Object.values(p.formats).every((f) => FORMATS.includes(f))
+    Object.values(p.formats).every((f) => (FIELD_FORMATS as readonly FieldFormat[]).includes(f))
   );
 }
 

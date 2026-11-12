@@ -12,10 +12,30 @@ import { IssuesSummary } from "./IssuesSummary";
 import { ProfileSummary } from "./ProfileSummary";
 
 export function ReadyApp() {
-  const { status, result, selectedCandidate, decisions, crm, exportOptions, rulePack, rulePackStatus, manifest } =
-    useReadyStore();
-  const { startProcessing, finishProcessing, failProcessing, selectCandidate, setManifest, reset } = useReadyStore();
-  const { decide, chooseField, mergeAllExact, setCrm, setExportOption, setRulePack } = useReadyStore();
+  // This component renders nearly all of the store, so one subscription is simplest.
+  const {
+    status,
+    result,
+    selectedCandidate,
+    decisions,
+    crm,
+    exportOptions,
+    rulePack,
+    rulePackStatus,
+    manifest,
+    startProcessing,
+    finishProcessing,
+    failProcessing,
+    selectCandidate,
+    decide,
+    chooseField,
+    mergeAllExact,
+    setCrm,
+    setExportOption,
+    setRulePack,
+    setManifest,
+    reset,
+  } = useReadyStore();
 
   useEffect(() => {
     void fetchRulePackManifest().then(setManifest);

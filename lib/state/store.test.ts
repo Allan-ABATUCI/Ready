@@ -23,6 +23,33 @@ describe("useReadyStore", () => {
     expect(useReadyStore.getState()).toMatchObject({ status: "idle", fileName: null, result: null });
   });
 
+  it("guides through the steps: upload only until a file is ready, then fix first", () => {
+    const s = useReadyStore.getState();
+    expect(useReadyStore.getState().step).toBe("upload");
+    s.setStep("review");
+    expect(useReadyStore.getState().step).toBe("upload"); // nothing to review yet
+    s.startProcessing("contacts.csv");
+    s.setStep("export");
+    expect(useReadyStore.getState().step).toBe("upload");
+    s.finishProcessing({
+      parsed: { headers: [], rows: [], delimiter: ",", hadBom: false, encoding: "utf-8", issues: [] },
+      profile: [],
+      roles: {},
+      dateOrder: null,
+      defaultCountry: null,
+      duplicates: [],
+      skippedLargeBlocks: 0,
+      cellIssues: [],
+    });
+    expect(useReadyStore.getState().step).toBe("fix");
+    s.setStep("export");
+    expect(useReadyStore.getState().step).toBe("export");
+    s.setStep("upload");
+    expect(useReadyStore.getState().step).toBe("upload");
+    s.reset();
+    expect(useReadyStore.getState().step).toBe("upload");
+  });
+
   it("tracks the current stage only while processing", () => {
     const s = useReadyStore.getState();
     s.setStage("matching");

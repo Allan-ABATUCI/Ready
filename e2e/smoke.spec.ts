@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { syntheticContacts } from "../tests/support/synthetic";
+import { answerConfirm, goToStep } from "./steps";
 
 test("profiles a file and shows duplicates side by side", async ({ page }) => {
   await page.goto("/");
@@ -14,6 +15,7 @@ test("profiles a file and shows duplicates side by side", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /Columns/ })).toContainText("9 rows");
   // "avery example" / "zoë müller" are single-case proper nouns.
   await expect(page.getByTestId("issues")).toContainText("Inconsistent capitalization in Full Name");
+  await goToStep(page, "Review");
   await expect(page.getByRole("heading", { name: /Possible duplicates/ })).toBeVisible();
   await expect(page.getByTestId("merge-preview")).toBeVisible();
 
@@ -22,6 +24,7 @@ test("profiles a file and shows duplicates side by side", async ({ page }) => {
   await page.getByRole("button", { name: /Merge all exact matches \(2\)/ }).click();
   await expect(page.getByTestId("review-progress")).toContainText("2 to merge");
 
+  await goToStep(page, "Export");
   await page.getByLabel("HubSpot").check();
   await expect(page.getByTestId("export-summary")).toContainText("9 rows → 7 after merging");
   // Signed HubSpot pack is fetched and verified; two contacts have no email.
@@ -49,6 +52,7 @@ test("reads an Excel-saved Windows-1252 file without mangling accents", async ({
   await expect(page.getByTestId("encoding-note")).toContainText("Read as Windows-1252");
   await expect(page.getByRole("heading", { name: /Columns/ })).toContainText("3 rows");
 
+  await goToStep(page, "Export");
   await page.getByLabel("HubSpot").check();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download CSV" }).click();
@@ -70,6 +74,7 @@ test("recognizes French headers and finds their duplicates automatically", async
   await expect(page.getByLabel("Use column 4 as")).toHaveValue("phone");
   await expect(page.getByLabel("Use column 5 as")).toHaveValue("company");
   // Zoë (same email) and Amélie (same phone, same accent-folded name) are both found.
+  await goToStep(page, "Review");
   await expect(page.getByRole("heading", { name: /Possible duplicates/ })).toContainText("(2)");
 });
 
@@ -80,13 +85,17 @@ test("lets the user assign a column the app didn't recognize", async ({ page }) 
     .setInputFiles(path.join(__dirname, "..", "tests", "fixtures", "unknown-email-header.csv"));
   await expect(page.getByTestId("status")).toHaveText("Done.");
   await expect(page.getByLabel("Use column 2 as")).toHaveValue("");
+  await goToStep(page, "Review");
   await expect(page.getByRole("heading", { name: /Possible duplicates/ })).toContainText("(0)");
 
+  await goToStep(page, "Fix");
   await page.getByLabel("Use column 2 as").selectOption("Email");
   await expect(page.getByTestId("status")).toHaveText("Done.");
+  await goToStep(page, "Review");
   await expect(page.getByRole("heading", { name: /Possible duplicates/ })).toContainText("(1)");
   await expect(page.getByTestId("merge-preview")).toContainText("Accounts Team");
 
+  await goToStep(page, "Export");
   await page.getByLabel("HubSpot").check();
   await expect(page.getByTestId("export-summary")).toContainText("columns: First Name, Last Name, Email, City");
 });
@@ -96,19 +105,25 @@ test("warns before a role change clears merge decisions", async ({ page }) => {
   await page
     .getByTestId("file-input")
     .setInputFiles(path.join(__dirname, "..", "tests", "fixtures", "contacts-duplicates.csv"));
+  await goToStep(page, "Review");
   await page.getByRole("button", { name: "Merge", exact: true }).click();
   await expect(page.getByTestId("review-progress")).toContainText("1 to merge");
 
   // Cancel: nothing changes.
-  page.once("dialog", (d) => void d.dismiss());
+  await goToStep(page, "Fix");
   await page.getByLabel("Use column 3 as").selectOption("");
+  await expect(page.getByRole("alertdialog")).toContainText("clears your merge decisions");
+  await answerConfirm(page, "Cancel");
   await expect(page.getByLabel("Use column 3 as")).toHaveValue("phone");
+  await goToStep(page, "Review");
   await expect(page.getByTestId("review-progress")).toContainText("1 to merge");
 
   // Accept: the role is cleared and decisions start over.
-  page.once("dialog", (d) => void d.accept());
+  await goToStep(page, "Fix");
   await page.getByLabel("Use column 3 as").selectOption("");
+  await answerConfirm(page, "Continue");
   await expect(page.getByLabel("Use column 3 as")).toHaveValue("");
+  await goToStep(page, "Review");
   await expect(page.getByTestId("review-progress")).toContainText("0 to merge");
 });
 
@@ -120,6 +135,7 @@ test("detects day-first dates and exports them as YYYY-MM-DD", async ({ page }) 
   await expect(page.getByTestId("date-order").getByLabel("Dates are written as")).toHaveValue("dmy");
   await expect(page.getByTestId("issues")).not.toContainText("Date could be");
 
+  await goToStep(page, "Export");
   await page.getByLabel("HubSpot").check();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download CSV" }).click();
@@ -136,6 +152,7 @@ test("reviews many pairs: filter by email, merge all shown, undo", async ({ page
     buffer: Buffer.from(syntheticContacts({ rows: 600, seed: 11, dupRate: 0.3 })),
   });
   await expect(page.getByTestId("status")).toHaveText("Done.");
+  await goToStep(page, "Review");
   await expect(page.getByTestId("pair-page")).toContainText(/Page 1 of [2-9]/);
 
   await page.getByLabel("Matched on").selectOption("Email");
@@ -143,8 +160,8 @@ test("reviews many pairs: filter by email, merge all shown, undo", async ({ page
   const shown = Number(/\((\d+)\)/.exec((await mergeShown.textContent())!)![1]);
   expect(shown).toBeGreaterThan(0);
 
-  page.once("dialog", (d) => void d.accept());
   await mergeShown.click();
+  await answerConfirm(page, "Merge");
   await expect(page.getByTestId("review-progress")).toContainText(`Reviewed ${shown} of`);
   await expect(page.getByTestId("review-progress")).toContainText(`${shown} to merge`);
 
@@ -167,14 +184,15 @@ test("fixes flagged cells in place, and the fixes reach the export", async ({ pa
   await expect(page.getByTestId("status")).toHaveText("Done.");
   await expect(issues).not.toContainText("Invalid date");
 
-  // The email column is used for matching, so this re-runs duplicate detection.
-  page.on("dialog", (d) => void d.accept());
+  // The email column is used for matching, so this re-runs duplicate detection
+  // (no question asked: there are no merge decisions to lose yet).
   await issues.getByText("Invalid email in Email").click();
   await page.getByLabel("Fix row 3, Email").fill("bo@example.test");
   await issues.getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("status")).toHaveText("Done.");
   await expect(issues).not.toContainText("Invalid email");
 
+  await goToStep(page, "Export");
   await page.getByLabel("HubSpot").check();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download CSV" }).click();

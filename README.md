@@ -10,6 +10,8 @@ No upload. No account. No SQL or code. **Your data never leaves your browser.**
 
 ## What it does
 
+Ready walks the user through four steps (**Upload → Fix → Review → Export**), with a built-in synthetic sample file for a first try.
+
 1. **Profile** — Drop in a CSV. Ready reads it in the browser and summarizes columns, fill rates, and value patterns.
 2. **Flag issues**
    - **Duplicates** — fuzzy matching on name, email, phone (national and international formats), and company

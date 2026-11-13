@@ -27,6 +27,10 @@ const inputsOf = ({ roles, dateOrder, defaultCountry }: AnalysisInputs): Analysi
 
 export type Status = "idle" | "processing" | "ready" | "error";
 
+/** The guided flow's steps, in order. */
+export const STEPS = ["upload", "fix", "review", "export"] as const;
+export type Step = (typeof STEPS)[number];
+
 /** Undo steps kept. Each is a full `decisions` snapshot, so this bounds memory on large files. */
 export const HISTORY_LIMIT = 50;
 
@@ -36,6 +40,8 @@ export const HISTORY_LIMIT = 50;
  */
 export interface ReadyState {
   status: Status;
+  /** The step shown. Only "upload" is reachable until a file is ready. */
+  step: Step;
   fileName: string | null;
   /** Current pipeline stage while processing or re-analyzing; null otherwise. */
   stage: Stage | null;
@@ -63,6 +69,8 @@ export interface ReadyState {
   rulePackStatus: RulePackStatus;
   manifest: RulePackManifest | null;
 
+  /** Go to a step; ignored for a later step while no file is ready. */
+  setStep: (step: Step) => void;
   startProcessing: (fileName: string) => void;
   setStage: (stage: Stage) => void;
   finishProcessing: (result: ProcessResult) => void;
@@ -114,6 +122,7 @@ export interface ReadyState {
 
 const initial = {
   status: "idle" as Status,
+  step: "upload" as Step,
   fileName: null,
   stage: null as Stage | null,
   result: null,
@@ -156,12 +165,16 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
   return {
     ...initial,
     manifest: null,
+    setStep: (step) => {
+      if (step === "upload" || get().status === "ready") set({ step });
+    },
     startProcessing: (fileName) => set({ ...initial, status: "processing", fileName }),
     // A late progress message must not flip a finished or failed run back to a stage.
     setStage: (stage) => {
       if (get().status === "processing" || get().pendingAnalysis) set({ stage });
     },
-    finishProcessing: (result) => set({ status: "ready", stage: null, result, overrides: {}, ...cleared }),
+    // A new file starts at the first step that needs the user: checking columns and values.
+    finishProcessing: (result) => set({ status: "ready", step: "fix", stage: null, result, overrides: {}, ...cleared }),
     failProcessing: () => set({ status: "error", stage: null, result: null, pendingAnalysis: null, ...cleared }),
     setRole: (role, col) => {
       const { result } = get();

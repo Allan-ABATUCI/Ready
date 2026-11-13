@@ -14,6 +14,7 @@ import {
   type PairSort,
 } from "@/lib/data-plane/review";
 import type { DuplicateCandidate, MatchField, ParsedCsv } from "@/lib/data-plane/types";
+import { useConfirm } from "./ConfirmDialog";
 import { CountUp } from "./CountUp";
 import { MergePreview } from "./MergePreview";
 import { PAGE_SIZE, PairList, STATUS_LABELS, type PairRow } from "./PairList";
@@ -58,6 +59,7 @@ export function DuplicateReview({
   onUndo,
   canUndo = false,
 }: DuplicateReviewProps) {
+  const confirm = useConfirm();
   const [filter, setFilter] = useState<PairFilter>(NO_FILTER);
   const [sort, setSort] = useState<PairSort>("score");
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: PAGE_SIZE });
@@ -104,9 +106,10 @@ export function DuplicateReview({
     setPagination((p) => ({ ...p, pageIndex: 0 }));
   };
 
-  const bulk = (action: PairAction) => {
+  const bulk = async (action: PairAction) => {
+    if (!onDecideMany) return;
     const what = action === "merge" ? "Merge" : "Keep separate";
-    if (onDecideMany && window.confirm(`${what} all ${shown.length} pairs shown?`)) onDecideMany(shown, action);
+    if (await confirm(`${what} all ${shown.length} pairs shown?`, { confirmLabel: what })) onDecideMany(shown, action);
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -220,7 +223,7 @@ export function DuplicateReview({
                   type="button"
                   className="rounded border px-2 py-1 disabled:opacity-40"
                   disabled={shown.length === 0}
-                  onClick={() => bulk("merge")}
+                  onClick={() => void bulk("merge")}
                 >
                   Merge all shown ({shown.length})
                 </button>
@@ -228,7 +231,7 @@ export function DuplicateReview({
                   type="button"
                   className="rounded border px-2 py-1 disabled:opacity-40"
                   disabled={shown.length === 0}
-                  onClick={() => bulk("keep_both")}
+                  onClick={() => void bulk("keep_both")}
                 >
                   Keep all shown separate ({shown.length})
                 </button>

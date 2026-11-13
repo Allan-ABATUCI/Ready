@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Request } from "@playwright/test";
 import Papa from "papaparse";
+import { goToStep } from "./steps";
 
 const FIXTURE = path.join(__dirname, "..", "tests", "fixtures", "privacy-sentinel.csv");
 // A distinctive file name, so we can assert it never leaves the browser either.
@@ -98,9 +99,11 @@ test("processing and exporting a file sends no file data over the network", asyn
     buffer: readFileSync(FIXTURE),
   });
   await expect(page.getByTestId("status")).toHaveText("Done.");
+  await goToStep(page, "Review");
   await expect(page.getByTestId("merge-preview")).toContainText("Quillon Zephyrine");
 
   await page.getByRole("button", { name: "Merge", exact: true }).click();
+  await goToStep(page, "Export");
   const packLoaded = page.waitForResponse((r) => r.url().endsWith("/api/rule-packs/salesforce"));
   await page.getByLabel("Salesforce").check();
   await packLoaded;

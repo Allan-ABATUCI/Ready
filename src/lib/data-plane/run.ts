@@ -9,11 +9,12 @@ import type {
   ProcessResult,
   Stage,
 } from "./types";
+import type { ColumnMapping, TablePreview } from "./combine";
 import type { CrmComparison } from "./crm-compare";
 import type { RestoredSession } from "./session";
 import type { WorkerRequest, WorkerResponse } from "./worker/protocol";
 
-type Done = Extract<WorkerResponse, { type: "processed" | "analyzed" | "restored" | "compared" }>;
+type Done = Extract<WorkerResponse, { type: "processed" | "inspected" | "analyzed" | "restored" | "compared" }>;
 
 /**
  * Handle one message from the worker: progress goes to `onStage`, timings to
@@ -63,6 +64,24 @@ function runInWorker(request: WorkerRequest, onStage?: (stage: Stage) => void): 
 /** Process a file off the main thread. The File never leaves the browser. */
 export async function processFileInWorker(file: File, onStage?: (stage: Stage) => void): Promise<ProcessResult> {
   const msg = await runInWorker({ type: "process", file }, onStage);
+  if (msg.type !== "processed") throw new Error("worker_failed");
+  return msg.result;
+}
+
+/** Read several files off the main thread and describe their columns, for the mapping screen. */
+export async function inspectFilesInWorker(files: File[], onStage?: (stage: Stage) => void): Promise<TablePreview[]> {
+  const msg = await runInWorker({ type: "inspect", files }, onStage);
+  if (msg.type !== "inspected") throw new Error("worker_failed");
+  return msg.tables;
+}
+
+/** Combine several files as the user mapped their columns, and process the result, off the main thread. */
+export async function combineFilesInWorker(
+  files: File[],
+  mapping: ColumnMapping,
+  onStage?: (stage: Stage) => void,
+): Promise<ProcessResult> {
+  const msg = await runInWorker({ type: "combine", files, mapping }, onStage);
   if (msg.type !== "processed") throw new Error("worker_failed");
   return msg.result;
 }

@@ -21,6 +21,19 @@ export interface ParsedCsv {
   hadBom: boolean;
   encoding: CsvEncoding;
   issues: CsvIssue[];
+  /** Set when the table combines several files (see combine.ts): which file each row came from. */
+  sources?: RowSources;
+}
+
+/**
+ * The files a combined table was made from. Rows keep their files' order, so
+ * file `f` holds rows `starts[f]` up to (not including) `starts[f + 1]`.
+ * File names stay in the browser like the rest of the file (CLAUDE.md).
+ */
+export interface RowSources {
+  files: string[];
+  /** First row of each file in the combined table; `starts[0]` is 0. */
+  starts: number[];
 }
 
 export type ValuePattern = "empty" | "email" | "phone" | "date" | "number" | "text";

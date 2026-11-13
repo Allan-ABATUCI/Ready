@@ -26,6 +26,14 @@ const CRM_CSV = [
   "Ysolde,Vexmorrow,ysolde.vexmorrow.wv3k@example.test,Brannoch WV3K",
 ].join("\n");
 
+// A second file to combine with the fixture: its own name and values, one contact shared.
+const SECOND_NAME = "webinar-SECONDFILE-SENTINEL-HN4R.csv";
+const SECOND_CSV = [
+  "E-mail;Full Name;Orvane Column HN4R",
+  "quillon.zephyrine.qz7x@example.test;Quillon Zephyrine;Talmery HN4R",
+  "orvane.hn4r@example.test;Orvane Talmery;Talmery HN4R",
+].join("\n");
+
 const csv = readFileSync(FIXTURE, "utf8");
 const [headerLine = "", ...dataLines] = csv.trim().split(/\r?\n/);
 
@@ -51,6 +59,11 @@ const SENTINELS: string[] = [
   "Vexmorrow",
   "Ysolde",
   "Brannoch",
+  SECOND_NAME,
+  "SECONDFILE-SENTINEL",
+  "HN4R",
+  "Orvane",
+  "Talmery",
 ].filter((s) => s.length >= 4);
 
 function variants(s: string): string[] {
@@ -199,6 +212,53 @@ test("processing and exporting a file sends no file data over the network", asyn
   // The debug log was on (sanity) and holds no sentinel either.
   expect(consoleLines.some((l) => l.startsWith('[ready] {"kind":"stage"'))).toBe(true);
   expect(consoleLines.some((l) => l.includes('"kind":"rule_pack"'))).toBe(true);
+  const consoleLeaks = consoleLines.flatMap((l) =>
+    NEEDLES.filter((n) => l.toLowerCase().includes(n)).map((n) => `console: ${l} contains ${JSON.stringify(n)}`),
+  );
+  expect(consoleLeaks).toEqual([]);
+});
+
+test("combining several files sends no file data over the network", async ({ page, context, baseURL }) => {
+  const pending: Promise<Captured>[] = [];
+  const consoleLines: string[] = [];
+  context.on("request", (req) => pending.push(capture(req)));
+  page.on("console", (msg) => consoleLines.push(msg.text()));
+  // Production debug log on, so its output is checked too.
+  await page.addInitScript(() => localStorage.setItem("ready:debug", "1"));
+
+  await page.goto("/");
+  await page.getByTestId("file-input").setInputFiles([
+    { name: UPLOAD_NAME, mimeType: "text/csv", buffer: readFileSync(FIXTURE) },
+    { name: SECOND_NAME, mimeType: "text/csv", buffer: Buffer.from(SECOND_CSV) },
+  ]);
+  await page.getByRole("button", { name: "Combine 2 files →" }).click();
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+
+  await goToStep(page, "Review");
+  await expect(page.getByTestId("pair-list")).toContainText(SECOND_NAME);
+  await goToStep(page, "Export");
+  await page.getByLabel("Salesforce").check();
+  await page.getByLabel("Add a “Source file” column").check();
+  await expect(page.getByTestId("crm-rules")).toContainText("Checked against Salesforce rules");
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download CSV" }).click();
+  const exported = readFileSync((await (await download).path())!, "utf8");
+  expect(exported).toContain(SECOND_NAME); // sanity: the names really are in the data
+  await page.waitForLoadState("networkidle");
+
+  const requests = await Promise.all(pending);
+  expect(requests.some((r) => r.url.endsWith("/api/rule-packs/manifest"))).toBe(true);
+  const origin = new URL(baseURL!).origin;
+  expect(requests.filter((r) => !/^(blob|data):/.test(r.url) && !r.url.startsWith(origin)).map((r) => r.url)).toEqual(
+    [],
+  );
+  expect(requests.filter((r) => r.method !== "GET").map((r) => `${r.method} ${r.url}`)).toEqual([]);
+  const leaks = requests.flatMap((r) =>
+    NEEDLES.filter((n) => r.haystack.includes(n)).map((n) => `${r.method} ${r.url} contains ${JSON.stringify(n)}`),
+  );
+  expect(leaks).toEqual([]);
+
+  expect(consoleLines.some((l) => l.startsWith('[ready] {"kind":"stage"'))).toBe(true);
   const consoleLeaks = consoleLines.flatMap((l) =>
     NEEDLES.filter((n) => l.toLowerCase().includes(n)).map((n) => `console: ${l} contains ${JSON.stringify(n)}`),
   );

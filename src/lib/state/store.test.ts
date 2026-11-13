@@ -411,3 +411,56 @@ describe("useReadyStore", () => {
     });
   });
 });
+
+describe("combining files", () => {
+  beforeEach(() => useReadyStore.getState().reset());
+  const files = [new File(["Email\n"], "a.csv"), new File(["E-mail\n"], "b.csv")];
+  const tables = [
+    { name: "a.csv", headers: ["Email", "Booth"], rowCount: 1, samples: [["a@example.test"], ["B1"]] },
+    { name: "b.csv", headers: ["E-mail"], rowCount: 1, samples: [["b@example.test"]] },
+  ];
+
+  it("waits on the mapping step with a proposed mapping, then can be cancelled", () => {
+    const s = useReadyStore.getState();
+    s.startProcessing("combined-contacts.csv");
+    s.startMapping(files, tables);
+    expect(useReadyStore.getState()).toMatchObject({
+      status: "mapping",
+      step: "upload",
+      combining: {
+        files,
+        tables,
+        mapping: [
+          { header: "Email", sources: [0, 0] },
+          { header: "Booth", sources: [1, null] },
+        ],
+      },
+    });
+    s.setStep("fix");
+    expect(useReadyStore.getState().step).toBe("upload"); // nothing to fix until combined
+    s.cancelMapping();
+    expect(useReadyStore.getState()).toMatchObject({ status: "idle", combining: null, fileName: null });
+  });
+
+  it("keeps the user's edits to the mapping", () => {
+    const s = useReadyStore.getState();
+    s.startMapping(files, tables);
+    s.setMapping([{ header: "Email", sources: [0, 0] }]);
+    expect(useReadyStore.getState().combining?.mapping).toEqual([{ header: "Email", sources: [0, 0] }]);
+  });
+
+  it("drops the files when combining starts or fails", () => {
+    const s = useReadyStore.getState();
+    s.startMapping(files, tables);
+    s.startProcessing("combined-contacts.csv");
+    expect(useReadyStore.getState().combining).toBeNull();
+    s.startMapping(files, tables);
+    s.failProcessing("mapping_invalid");
+    expect(useReadyStore.getState()).toMatchObject({ status: "error", errorCode: "mapping_invalid", combining: null });
+  });
+
+  it("ignores mapping edits when nothing is being combined", () => {
+    useReadyStore.getState().setMapping([]);
+    expect(useReadyStore.getState().combining).toBeNull();
+  });
+});

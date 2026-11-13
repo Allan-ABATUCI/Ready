@@ -9,6 +9,7 @@ import type { DateOrder } from "@/lib/data-plane/dates";
 import { STEP_IDS, type RestoredSession, type SessionStep } from "@/lib/data-plane/session";
 import type { CountryCode } from "@/lib/data-plane/phone";
 import type { AnalysisInputs, AnalysisScope, AnalysisUpdate, ProcessResult, Stage } from "@/lib/data-plane/types";
+import { proposeMapping, type ColumnMapping, type TablePreview } from "@/lib/data-plane/combine";
 import type { CrmComparison } from "@/lib/data-plane/crm-compare";
 import type { ErrorCode } from "@/lib/diagnostics";
 import type { Crm, RulePack, RulePackManifest, RulePackStatus } from "@/lib/rule-packs/types";
@@ -28,7 +29,15 @@ const inputsOf = ({ roles, dateOrder, defaultCountry }: AnalysisInputs): Analysi
   defaultCountry,
 });
 
-export type Status = "idle" | "processing" | "ready" | "error";
+/** "mapping": several files were read and wait for the user to line up their columns. */
+export type Status = "idle" | "processing" | "mapping" | "ready" | "error";
+
+/** Files being combined: kept in memory only, until the user confirms or cancels the mapping. */
+export interface Combining {
+  files: File[];
+  tables: TablePreview[];
+  mapping: ColumnMapping;
+}
 
 /** The guided flow's steps, in order. */
 export const STEPS = STEP_IDS;
@@ -48,6 +57,8 @@ export interface ReadyState {
   /** The step shown. Only "upload" is reachable until a file is ready. */
   step: Step;
   fileName: string | null;
+  /** Set while `status` is "mapping". */
+  combining: Combining | null;
   /** Current pipeline stage while processing or re-analyzing; null otherwise. */
   stage: Stage | null;
   result: ProcessResult | null;
@@ -88,6 +99,11 @@ export interface ReadyState {
   startProcessing: (fileName: string) => void;
   setStage: (stage: Stage) => void;
   finishProcessing: (result: ProcessResult) => void;
+  /** Several files were read: show their columns, lined up as `proposeMapping` guesses. */
+  startMapping: (files: File[], tables: TablePreview[]) => void;
+  setMapping: (mapping: ColumnMapping) => void;
+  /** Drop the files being combined and go back to an empty upload step. */
+  cancelMapping: () => void;
   /** Load a saved session: the file, fixes, decisions and settings, on the step it was saved at. */
   finishRestore: (restored: RestoredSession) => void;
   failProcessing: (code?: ErrorCode) => void;
@@ -148,6 +164,7 @@ const initial = {
   errorCode: null as ErrorCode | null,
   step: "upload" as Step,
   fileName: null,
+  combining: null as Combining | null,
   stage: null as Stage | null,
   result: null,
   pendingAnalysis: null as ReadyState["pendingAnalysis"],
@@ -203,6 +220,13 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
     },
     // A new file starts at the first step that needs the user: checking columns and values.
     finishProcessing: (result) => set({ status: "ready", step: "fix", stage: null, result, overrides: {}, ...cleared }),
+    startMapping: (files, tables) =>
+      set({ status: "mapping", stage: null, combining: { files, tables, mapping: proposeMapping(tables) } }),
+    setMapping: (mapping) => {
+      const { combining } = get();
+      if (combining) set({ combining: { ...combining, mapping } });
+    },
+    cancelMapping: () => set(initial),
     finishRestore: ({ fileName, result, overrides, decisions, crm, exportOptions, step }) =>
       set({
         ...initial,
@@ -217,7 +241,15 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
         rulePackStatus: crm ? "loading" : "idle",
       }),
     failProcessing: (errorCode = "unknown") =>
-      set({ status: "error", errorCode, stage: null, result: null, pendingAnalysis: null, ...cleared }),
+      set({
+        status: "error",
+        errorCode,
+        stage: null,
+        result: null,
+        combining: null,
+        pendingAnalysis: null,
+        ...cleared,
+      }),
     setRole: (role, col) => {
       const { result } = get();
       if (!result) return null;

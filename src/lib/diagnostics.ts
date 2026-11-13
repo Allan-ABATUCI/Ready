@@ -19,6 +19,9 @@ export const DEBUG_STORAGE_KEY = "ready:debug";
 /** Every error code the app can surface. Anything else is logged as "unknown". */
 export const ERROR_CODES = [
   "parse_failed",
+  "mapping_invalid",
+  /** A saved session was dropped together with other files. */
+  "session_with_files",
   "analyze_failed",
   "worker_failed",
   "session_invalid",

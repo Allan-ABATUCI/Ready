@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { combineTables, proposeMapping } from "./combine";
+import { parseCsv } from "./csv";
 import { DEFAULT_EXPORT_OPTIONS } from "./export-table";
 import { pairKey } from "./merge";
-import { processCsv } from "./process";
+import { processCsv, processParsed } from "./process";
 import { SAMPLE_CSV } from "./sample";
 import {
   buildSession,
@@ -104,5 +106,46 @@ describe("sessions", () => {
     expect((await run(saved())).type).toBe("restored");
     const bad = await run(tamper((s) => (s.crm = "zoho QUILLON")));
     expect(bad).toEqual({ type: "error", code: "session_invalid" });
+  });
+});
+
+describe("sessions of combined files", () => {
+  const files = [
+    { name: "tradeshow.csv", parsed: parseCsv("Name,Email\nAvery Example,avery@example.test\n") },
+    { name: "webinar.csv", parsed: parseCsv("Email,Name\navery@example.test,Avery Example\nsam@example.test,Sam\n") },
+  ];
+  const combined = processParsed(combineTables(files, proposeMapping(files.map((f) => f.parsed))));
+  const combinedState: SessionState = {
+    ...state,
+    fileName: "combined-contacts.csv",
+    result: combined,
+    overrides: {},
+    decisions: {},
+  };
+  const savedCombined = () => JSON.parse(JSON.stringify(buildSession(combinedState)));
+
+  it("keep which file each row came from", () => {
+    const restored = restoreSession(parseSession(JSON.stringify(savedCombined())));
+    expect(restored.result.parsed.sources).toEqual({ files: ["tradeshow.csv", "webinar.csv"], starts: [0, 1] });
+    expect(restored.result.duplicates.map((d) => [d.a, d.b])).toEqual([[0, 1]]);
+  });
+
+  it("are not needed: a single file's session has no sources", () => {
+    expect(buildSession(state).parsed).not.toHaveProperty("sources");
+    expect(parseSession(saved()).parsed).not.toHaveProperty("sources");
+  });
+
+  it.each<[string, (s: { parsed: { sources: unknown } }) => void]>([
+    ["sources that aren't an object", (s) => (s.parsed.sources = "x")],
+    ["no files", (s) => (s.parsed.sources = { files: [], starts: [] })],
+    ["a file name that isn't text", (s) => (s.parsed.sources = { files: [1, "b"], starts: [0, 1] })],
+    ["starts not matching the files", (s) => (s.parsed.sources = { files: ["a", "b"], starts: [0] })],
+    ["a first file not starting at row 0", (s) => (s.parsed.sources = { files: ["a", "b"], starts: [1, 2] })],
+    ["starts going backwards", (s) => (s.parsed.sources = { files: ["a", "b", "c"], starts: [0, 2, 1] })],
+    ["a start past the last row", (s) => (s.parsed.sources = { files: ["a", "b"], starts: [0, 9] })],
+  ])("reject %s", (_, edit) => {
+    const s = savedCombined();
+    edit(s);
+    expect(() => parseSession(JSON.stringify(s))).toThrow(new SessionError("session_invalid"));
   });
 });

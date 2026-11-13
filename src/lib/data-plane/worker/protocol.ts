@@ -7,11 +7,16 @@ import type {
   ProcessResult,
   Stage,
 } from "../types";
+import type { ColumnMapping, TablePreview } from "../combine";
 import type { CrmComparison } from "../crm-compare";
 import type { RestoredSession } from "../session";
 
 export type WorkerRequest =
   | { type: "process"; file: File }
+  /** Read several files and describe their columns, for the mapping screen. */
+  | { type: "inspect"; files: File[] }
+  /** Read several files again, combine them as mapped, and process the result. */
+  | { type: "combine"; files: File[]; mapping: ColumnMapping }
   /** Read a saved session file and rebuild its analysis. */
   | { type: "resume"; file: File }
   /** Find rows of the (fixed) file that are already in a CRM export. */
@@ -25,6 +30,7 @@ export type WorkerResponse =
   /** How long a stage took, for diagnostics. */
   | { type: "timing"; stage: Stage; ms: number }
   | { type: "processed"; result: ProcessResult }
+  | { type: "inspected"; tables: TablePreview[] }
   | { type: "analyzed"; analysis: AnalysisUpdate }
   | { type: "restored"; restored: RestoredSession }
   | { type: "compared"; comparison: CrmComparison }
@@ -32,6 +38,7 @@ export type WorkerResponse =
 
 export type WorkerErrorCode =
   | "parse_failed"
+  | "mapping_invalid"
   | "analyze_failed"
   | "session_invalid"
   | "session_version"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyDecisions, defaultSide, isExactMatch, mergePair, pairKey, type Decisions } from "./merge";
+import { applyDecisions, defaultSide, excludeRows, isExactMatch, mergePair, pairKey, type Decisions } from "./merge";
 import type { DuplicateCandidate, ParsedCsv } from "./types";
 
 const parsed: ParsedCsv = {
@@ -101,5 +101,36 @@ describe("applyDecisions", () => {
     const a = applyDecisions(parsed, candidates, d);
     const reversed = Object.fromEntries(Object.entries(d).reverse());
     expect(applyDecisions(parsed, [...candidates].reverse(), reversed)).toEqual(a);
+  });
+});
+
+describe("excludeRows", () => {
+  const file: ParsedCsv = {
+    headers: ["Name"],
+    rows: [["A"], ["A2"], ["B"], ["C"]],
+    delimiter: ",",
+    hadBom: false,
+    encoding: "utf-8",
+    issues: [],
+  };
+  const candidates: DuplicateCandidate[] = [{ a: 0, b: 1, score: 100, matchedOn: ["name"] }];
+  const merged = applyDecisions(file, candidates, { "0:1": { action: "merge", fields: {} } });
+
+  it("records which original rows make each output row", () => {
+    expect(merged.members).toEqual([[0, 1], [2], [3]]);
+    expect(merged.excludedRows).toBe(0);
+  });
+
+  it("leaves out a merged group when any of its rows is already in the CRM", () => {
+    const out = excludeRows(merged, new Set([1, 3]));
+    expect(out.rows).toEqual([["B"]]);
+    expect(out.sourceRows).toEqual([2]);
+    expect(out.members).toEqual([[2]]);
+    expect(out.mergedGroups).toBe(0);
+    expect(out.excludedRows).toBe(2);
+  });
+
+  it("changes nothing for an empty set", () => {
+    expect(excludeRows(merged, new Set())).toBe(merged);
   });
 });

@@ -26,11 +26,12 @@ export const DETAIL_HEADERS = ["Row in export", "Column in your file", "Change",
  * downloads it and checks no request carries it.
  */
 export function buildChangeReport(table: ExportTable, fileHeaders: string[]): { headers: string[]; rows: CsvRow[] } {
-  const { counts, rowsIn, rowsOut, mergedGroups, cells } = table.changes;
+  const { counts, rowsIn, rowsOut, mergedGroups, excludedRows, cells } = table.changes;
   const summary: CsvRow[] = [
     ["Rows in", String(rowsIn)],
     ["Rows out", String(rowsOut)],
     ["Merged groups", String(mergedGroups)],
+    ...(excludedRows > 0 ? [["Already in CRM, left out", String(excludedRows)]] : []),
     ...CHANGE_KINDS.map((k) => [CHANGE_LABELS[k], String(counts[k])]),
   ];
   const detail: CsvRow[] = cells.map((c) => [

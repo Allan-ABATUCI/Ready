@@ -19,7 +19,7 @@ Ready walks the user through four steps (**Upload → Fix → Review → Export*
    - **Likely email typos** — e.g. `gmial.com` → `gmail.com`, from a bundled list of common domains (never looked up online)
    - **Missing required fields** — based on the target CRM's import rules
    - **Inconsistent capitalization** — e.g. `ACME corp` vs. `Acme Corp`
-3. **Review** — Filter the list of suspected duplicates, compare them side by side and decide what to merge or keep (one by one, in bulk, or with keyboard shortcuts; with undo). Fix flagged cells in place.
+3. **Review** — Filter the list of suspected duplicates, compare them side by side and decide what to merge or keep (one by one, in bulk, or with keyboard shortcuts; with undo). Fix flagged cells in place. Optionally add an export of your CRM to find contacts you already have, and leave them out of the export.
 4. **Export** — Preview and download a clean, deduplicated CSV formatted for your chosen CRM, plus a local report of every change clean-up made.
 
 **Save progress** downloads a session file (`<name>.ready.json`) with the data, fixes, merge decisions and settings; drop it back in later to carry on. It is an ordinary file the user keeps: the app stores nothing in the browser.

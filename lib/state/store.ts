@@ -9,6 +9,7 @@ import type { DateOrder } from "@/lib/data-plane/dates";
 import { STEP_IDS, type RestoredSession, type SessionStep } from "@/lib/data-plane/session";
 import type { CountryCode } from "@/lib/data-plane/phone";
 import type { AnalysisInputs, AnalysisScope, AnalysisUpdate, ProcessResult, Stage } from "@/lib/data-plane/types";
+import type { CrmComparison } from "@/lib/data-plane/crm-compare";
 import type { ErrorCode } from "@/lib/diagnostics";
 import type { Crm, RulePack, RulePackManifest, RulePackStatus } from "@/lib/rule-packs/types";
 
@@ -72,6 +73,15 @@ export interface ReadyState {
   rulePack: RulePack | null;
   rulePackStatus: RulePackStatus;
   manifest: RulePackManifest | null;
+  /**
+   * An export of the user's CRM to compare against, kept in memory so the
+   * comparison can be re-run when the file or its roles change. Never saved.
+   */
+  crmFile: File | null;
+  crmComparison: CrmComparison | null;
+  crmStatus: "idle" | "comparing" | "error";
+  /** Leave rows already in the CRM out of the export. */
+  excludeExisting: boolean;
 
   /** Go to a step; ignored for a later step while no file is ready. */
   setStep: (step: Step) => void;
@@ -123,6 +133,13 @@ export interface ReadyState {
   /** Store the result of loading `crm`'s pack; ignored if the user has since picked another CRM. */
   setRulePack: (crm: Crm, pack: RulePack | null) => void;
   setManifest: (manifest: RulePackManifest | null) => void;
+  /** Compare against `file` (a CRM export); the caller runs the comparison. */
+  startCompare: (file: File) => void;
+  /** Store a comparison; ignored if the CRM file was replaced or cleared since. */
+  finishCompare: (file: File, comparison: CrmComparison) => void;
+  failCompare: (file: File) => void;
+  clearCompare: () => void;
+  setExcludeExisting: (exclude: boolean) => void;
   reset: () => void;
 }
 
@@ -142,6 +159,10 @@ const initial = {
   exportOptions: DEFAULT_EXPORT_OPTIONS,
   rulePack: null as RulePack | null,
   rulePackStatus: "idle" as RulePackStatus,
+  crmFile: null as File | null,
+  crmComparison: null as CrmComparison | null,
+  crmStatus: "idle" as ReadyState["crmStatus"],
+  excludeExisting: true,
 };
 
 export const useReadyStore = create<ReadyState>()((set, get) => {
@@ -284,6 +305,15 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
     },
     setExportOption: (key, value) => set({ exportOptions: { ...get().exportOptions, [key]: value } }),
     setManifest: (manifest) => set({ manifest }),
+    startCompare: (crmFile) => set({ crmFile, crmStatus: "comparing" }),
+    finishCompare: (file, crmComparison) => {
+      if (get().crmFile === file) set({ crmComparison, crmStatus: "idle" });
+    },
+    failCompare: (file) => {
+      if (get().crmFile === file) set({ crmComparison: null, crmStatus: "error" });
+    },
+    clearCompare: () => set({ crmFile: null, crmComparison: null, crmStatus: "idle" }),
+    setExcludeExisting: (excludeExisting) => set({ excludeExisting }),
     reset: () => set(initial),
   };
 });

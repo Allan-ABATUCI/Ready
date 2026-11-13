@@ -9,10 +9,11 @@ import type {
   ProcessResult,
   Stage,
 } from "./types";
+import type { CrmComparison } from "./crm-compare";
 import type { RestoredSession } from "./session";
 import type { WorkerRequest, WorkerResponse } from "./worker/protocol";
 
-type Done = Extract<WorkerResponse, { type: "processed" | "analyzed" | "restored" }>;
+type Done = Extract<WorkerResponse, { type: "processed" | "analyzed" | "restored" | "compared" }>;
 
 /**
  * Handle one message from the worker: progress goes to `onStage`, timings to
@@ -84,4 +85,16 @@ export async function resumeInWorker(file: File, onStage?: (stage: Stage) => voi
   const msg = await runInWorker({ type: "resume", file }, onStage);
   if (msg.type !== "restored") throw new Error("worker_failed");
   return msg.restored;
+}
+
+/** Compare the file (as fixed) with a CRM export, off the main thread. */
+export async function compareInWorker(
+  file: File,
+  parsed: ParsedCsv,
+  inputs: AnalysisInputs,
+  onStage?: (stage: Stage) => void,
+): Promise<CrmComparison> {
+  const msg = await runInWorker({ type: "compare", file, parsed, inputs }, onStage);
+  if (msg.type !== "compared") throw new Error("worker_failed");
+  return msg.comparison;
 }

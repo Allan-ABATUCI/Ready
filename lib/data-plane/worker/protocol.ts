@@ -7,12 +7,15 @@ import type {
   ProcessResult,
   Stage,
 } from "../types";
+import type { CrmComparison } from "../crm-compare";
 import type { RestoredSession } from "../session";
 
 export type WorkerRequest =
   | { type: "process"; file: File }
   /** Read a saved session file and rebuild its analysis. */
   | { type: "resume"; file: File }
+  /** Find rows of the (fixed) file that are already in a CRM export. */
+  | { type: "compare"; file: File; parsed: ParsedCsv; inputs: AnalysisInputs }
   /** Re-run the input-dependent stages after the user changes an input or edits a cell; the file isn't read again. */
   | { type: "analyze"; parsed: ParsedCsv; profile: ColumnProfile[]; inputs: AnalysisInputs; scope: AnalysisScope };
 
@@ -24,6 +27,7 @@ export type WorkerResponse =
   | { type: "processed"; result: ProcessResult }
   | { type: "analyzed"; analysis: AnalysisUpdate }
   | { type: "restored"; restored: RestoredSession }
+  | { type: "compared"; comparison: CrmComparison }
   | { type: "error"; code: WorkerErrorCode };
 
 export type WorkerErrorCode =

@@ -108,7 +108,7 @@ export function nameSignature(name: string): string {
   return parts.sort().join(" ");
 }
 
-function blockKeys(r: Keyed): string[] {
+export function blockKeys(r: Keyed): string[] {
   const keys: string[] = [];
   if (r.email) keys.push(`e:${r.email}`);
   if (r.phone) keys.push(`p:${r.phone}`);

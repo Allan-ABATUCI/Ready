@@ -58,8 +58,12 @@ export interface MergeResult {
   sourceRows: number[];
   /** Original row indexes folded into another row. */
   removed: number[];
+  /** Original row indexes making up each output row: the survivor first, then those folded into it. */
+  members: number[][];
   /** Output rows made from two or more original rows. */
   mergedGroups: number;
+  /** Output rows left out because they are already in the CRM (see `excludeRows`). */
+  excludedRows: number;
 }
 
 /**
@@ -96,13 +100,37 @@ export function applyDecisions(parsed: ParsedCsv, candidates: DuplicateCandidate
   const rows: CsvRow[] = [];
   const sourceRows: number[] = [];
   const removed: number[] = [];
+  const membersOf = new Map<number, number[]>();
   for (let i = 0; i < n; i++) {
-    if (find(i) !== i) {
+    const root = find(i);
+    if (root !== i) {
       removed.push(i);
+      membersOf.get(root)!.push(i); // roots come first: a root is its group's smallest index
       continue;
     }
+    membersOf.set(i, [i]);
     rows.push(records.get(i) ?? parsed.rows[i]!);
     sourceRows.push(i);
   }
-  return { rows, sourceRows, removed, mergedGroups: records.size };
+  const members = sourceRows.map((i) => membersOf.get(i)!);
+  return { rows, sourceRows, removed, members, mergedGroups: records.size, excludedRows: 0 };
+}
+
+/**
+ * Leave out output rows that any of `rows` (original indexes) went into: if one
+ * contact of a merged group is already in the CRM, the merged record is too.
+ */
+export function excludeRows(merged: MergeResult, rows: ReadonlySet<number>): MergeResult {
+  if (rows.size === 0) return merged;
+  const keep = merged.members.map((group) => !group.some((i) => rows.has(i)));
+  const pick = <T>(xs: T[]) => xs.filter((_, r) => keep[r]);
+  const members = pick(merged.members);
+  return {
+    rows: pick(merged.rows),
+    sourceRows: pick(merged.sourceRows),
+    removed: merged.removed,
+    members,
+    mergedGroups: members.filter((g) => g.length > 1).length,
+    excludedRows: merged.excludedRows + keep.filter((k) => !k).length,
+  };
 }

@@ -139,6 +139,7 @@ describe("buildExportTable", () => {
         rowsIn: 4,
         rowsOut: 3,
         mergedGroups: 1,
+        excludedRows: 0,
         cells: [],
       });
     });

@@ -7,7 +7,7 @@ import type { DateOrder } from "@/lib/data-plane/dates";
 import { applyOverrides } from "@/lib/data-plane/overrides";
 import type { CountryCode } from "@/lib/data-plane/phone";
 import { downloadText } from "@/lib/data-plane/export";
-import { analyzeInWorker, processFileInWorker, resumeInWorker } from "@/lib/data-plane/run";
+import { analyzeInWorker, compareInWorker, processFileInWorker, resumeInWorker } from "@/lib/data-plane/run";
 import { buildSession, isSessionFileName, sessionFileName } from "@/lib/data-plane/session";
 import { sampleFile } from "@/lib/data-plane/sample";
 import { logEvent, toErrorCode, type ErrorCode } from "@/lib/diagnostics";
@@ -15,6 +15,7 @@ import type { Stage } from "@/lib/data-plane/types";
 import { loadVerifiedRulePack } from "@/lib/rule-packs/load";
 import { useReadyStore, type AnalysisRequest, type Step } from "@/lib/state/store";
 import { ConfirmProvider, useConfirm } from "./ConfirmDialog";
+import { CrmCompare } from "./CrmCompare";
 import { DuplicateReview } from "./DuplicateReview";
 import { ExportPanel } from "./ExportPanel";
 import { FileDrop } from "./FileDrop";
@@ -100,6 +101,15 @@ function ReadyFlow() {
     setRulePack,
     setManifest,
     reset,
+    crmFile,
+    crmComparison,
+    crmStatus,
+    excludeExisting,
+    startCompare,
+    finishCompare,
+    failCompare,
+    clearCompare,
+    setExcludeExisting,
   } = useReadyStore();
   const reanalyzing = pendingAnalysis !== null;
 
@@ -186,6 +196,27 @@ function ReadyFlow() {
   const edited = useMemo(
     () => (result ? { ...result, parsed: applyOverrides(result.parsed, overrides) } : null),
     [result, overrides],
+  );
+
+  // Compare with the CRM export whenever it, the fixed file or the matching inputs
+  // change. Only the latest run's result is kept.
+  const compareRun = useRef(0);
+  useEffect(() => {
+    if (!crmFile || !edited || reanalyzing) return;
+    const run = ++compareRun.current;
+    startCompare(crmFile);
+    const inputs = { roles: edited.roles, dateOrder: edited.dateOrder, defaultCountry: edited.defaultCountry };
+    compareInWorker(crmFile, edited.parsed, inputs)
+      .then((comparison) => run === compareRun.current && finishCompare(crmFile, comparison))
+      .catch((e) => {
+        logEvent({ kind: "error", code: toErrorCode(e) });
+        if (run === compareRun.current) failCompare(crmFile);
+      });
+  }, [crmFile, edited, reanalyzing, startCompare, finishCompare, failCompare]);
+
+  const existingRows = useMemo(
+    () => (excludeExisting && crmComparison ? new Set(crmComparison.matches.map((m) => m.row)) : undefined),
+    [excludeExisting, crmComparison],
   );
 
   const ready = status === "ready" && edited !== null;
@@ -341,7 +372,20 @@ function ReadyFlow() {
                   canUndo={history.length > 0}
                 />
               </div>
-              <NextButton style={stagger(1)} onClick={() => setStep("export")}>
+              <div style={stagger(1)}>
+                <CrmCompare
+                  parsed={edited.parsed}
+                  roles={edited.roles}
+                  fileName={crmFile?.name ?? null}
+                  comparison={crmComparison}
+                  status={crmStatus}
+                  onFile={startCompare}
+                  onClear={clearCompare}
+                  exclude={excludeExisting}
+                  onExclude={setExcludeExisting}
+                />
+              </div>
+              <NextButton style={stagger(2)} onClick={() => setStep("export")}>
                 Next: export
               </NextButton>
             </>,
@@ -359,6 +403,7 @@ function ReadyFlow() {
                   onOption={setExportOption}
                   rulePack={rulePack}
                   rulePackStatus={rulePackStatus}
+                  existingRows={existingRows}
                 />
               </div>
               <div style={stagger(1)} className="flex gap-3">

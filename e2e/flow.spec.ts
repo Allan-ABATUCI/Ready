@@ -146,3 +146,37 @@ test("takes rows pasted from a spreadsheet", async ({ page }) => {
   await goToStep(page, "Review");
   await expect(page.getByRole("heading", { name: /Possible duplicates/ })).toContainText("(1)");
 });
+
+test("leaves contacts already in the CRM out of the export", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Try a sample file" }).click();
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+  await goToStep(page, "Review");
+  await page.getByTestId("crm-file-input").setInputFiles({
+    name: "hubspot-export.xlsx",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: Buffer.from(
+      buildXlsx([
+        ["First Name", "Last Name", "Email", "Company Name"],
+        ["Kai", "Fictional", "kai@example.test", "Acme Corp"],
+        ["Lee", "Madeup", "LEE@example.test", "Example Widgets Ltd"],
+        ["Not", "Inthefile", "nope@example.test", "Elsewhere"],
+      ]),
+    ),
+  });
+  await expect(page.getByTestId("crm-compare-status")).toContainText(
+    "2 of 12 rows are already in your CRM (3 contacts",
+  );
+  await expect(page.getByTestId("crm-matches")).toContainText("Kai Fictional");
+
+  await goToStep(page, "Export");
+  await page.getByLabel("HubSpot").check();
+  await expect(page.getByTestId("export-summary")).toContainText(
+    "12 rows → 10 after merging and leaving out 2 already in your CRM",
+  );
+
+  await goToStep(page, "Review");
+  await page.getByLabel("Leave them out of the export").uncheck();
+  await goToStep(page, "Export");
+  await expect(page.getByTestId("export-summary")).toContainText("12 rows → 12 after merging");
+});

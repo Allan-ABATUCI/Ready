@@ -1,4 +1,5 @@
 import "client-only";
+import { compareWithReference } from "../crm-compare";
 import { decodeCsvBytes, parseCsv } from "../csv";
 import { analyze, checkIssues, processParsed } from "../process";
 import { parseSession, SessionError } from "../session";
@@ -48,6 +49,13 @@ export async function handleRequest(req: WorkerRequest, post: (msg: WorkerRespon
       const restored = restoreSession(session, onStage);
       endStage();
       post({ type: "restored", restored });
+    } else if (req.type === "compare") {
+      onStage("parsing");
+      const reference = readTable(new Uint8Array(await req.file.arrayBuffer()));
+      onStage("matching");
+      const comparison = compareWithReference(req.parsed, req.inputs.roles, req.inputs.defaultCountry, reference);
+      endStage();
+      post({ type: "compared", comparison });
     } else {
       const run = req.scope === "all" ? analyze : checkIssues;
       const analysis = run(req.parsed, req.profile, req.inputs, onStage);

@@ -13,7 +13,7 @@ import {
   type ExportToggle,
   type SetExportOption,
 } from "@/lib/data-plane/export-table";
-import { applyDecisions, type Decisions } from "@/lib/data-plane/merge";
+import { applyDecisions, excludeRows, type Decisions } from "@/lib/data-plane/merge";
 import { checkRequirements, type RequirementCode } from "@/lib/data-plane/requirements";
 import type { ProcessResult } from "@/lib/data-plane/types";
 import { groupBy } from "@/lib/group";
@@ -46,6 +46,8 @@ export interface ExportPanelProps {
   /** Verified pack for `crm`, if loaded. */
   rulePack?: RulePack | null;
   rulePackStatus?: RulePackStatus;
+  /** Rows (original indexes) already in the CRM, to leave out of the export. */
+  existingRows?: ReadonlySet<number>;
   /** Injected for tests; defaults to a local blob download. */
   download?: typeof downloadCsv;
 }
@@ -59,12 +61,13 @@ export function ExportPanel({
   onOption,
   rulePack = null,
   rulePackStatus = "idle",
+  existingRows,
   download = downloadCsv,
 }: ExportPanelProps) {
-  const merged = useMemo(
-    () => applyDecisions(result.parsed, result.duplicates, decisions),
-    [result.parsed, result.duplicates, decisions],
-  );
+  const merged = useMemo(() => {
+    const all = applyDecisions(result.parsed, result.duplicates, decisions);
+    return existingRows ? excludeRows(all, existingRows) : all;
+  }, [result.parsed, result.duplicates, decisions, existingRows]);
   const table = useMemo(
     () => (crm ? buildExportTable(result, merged, crm, options, PREVIEW_ROWS) : null),
     [result, merged, crm, options],
@@ -143,6 +146,7 @@ export function ExportPanel({
 
       <p className="mt-3 text-sm text-slate-600" data-testid="export-summary">
         {result.parsed.rows.length} rows → {merged.rows.length} after merging
+        {merged.excludedRows > 0 && <> and leaving out {merged.excludedRows} already in your CRM</>}
         {table && <> · columns: {table.headers.join(", ")}</>}
       </p>
 

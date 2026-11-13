@@ -12,7 +12,15 @@ import { ExportPanel } from "./ExportPanel";
 
 const result = processCsv("Full Name,Email\nAvery Example,AVERY@example.test\navery example,avery@example.test\n");
 
-function Harness({ download, decisions = {} }: { download: Download; decisions?: Decisions }) {
+function Harness({
+  download,
+  decisions = {},
+  existingRows,
+}: {
+  download: Download;
+  decisions?: Decisions;
+  existingRows?: ReadonlySet<number>;
+}) {
   const [crm, setCrm] = useState<Crm | null>(null);
   const [options, setOptions] = useState<ExportOptions>(DEFAULT_EXPORT_OPTIONS);
   return (
@@ -24,6 +32,7 @@ function Harness({ download, decisions = {} }: { download: Download; decisions?:
       onCrm={setCrm}
       onOption={(k, v) => setOptions((o) => ({ ...o, [k]: v }))}
       download={download}
+      existingRows={existingRows}
     />
   );
 }
@@ -64,6 +73,17 @@ describe("ExportPanel", () => {
       ["Name", "Email"],
       [["Avery Example", "AVERY@example.test"]],
     );
+  });
+
+  it("leaves out rows already in the CRM", async () => {
+    const download = vi.fn();
+    render(<Harness download={download} existingRows={new Set([1])} />);
+    await userEvent.click(screen.getByLabelText("HubSpot"));
+    expect(screen.getByTestId("export-summary")).toHaveTextContent(
+      "2 rows → 1 after merging and leaving out 1 already in your CRM",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Download CSV" }));
+    expect(download.mock.lastCall![2]).toEqual([["Avery", "Example", "avery@example.test"]]);
   });
 
   it("confirms the download, but only once one has started", async () => {

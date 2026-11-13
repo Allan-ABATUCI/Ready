@@ -18,6 +18,14 @@ const FIXTURE = path.join(__dirname, "..", "tests", "fixtures", "privacy-sentine
 // A distinctive file name, so we can assert it never leaves the browser either.
 const UPLOAD_NAME = "acme-leads-FILENAME-SENTINEL-QZ7X.csv";
 
+// A CRM export to compare against: its own sentinels, and one contact shared with the fixture.
+const CRM_NAME = "crm-export-CRMFILE-SENTINEL-WV3K.csv";
+const CRM_CSV = [
+  "First Name,Last Name,Email,Vexmorrow Field WV3K",
+  "Zoë,Ångström-Qz7x,zoe.qz7x@example.test,Brannoch WV3K",
+  "Ysolde,Vexmorrow,ysolde.vexmorrow.wv3k@example.test,Brannoch WV3K",
+].join("\n");
+
 const csv = readFileSync(FIXTURE, "utf8");
 const [headerLine = "", ...dataLines] = csv.trim().split(/\r?\n/);
 
@@ -37,6 +45,12 @@ const SENTINELS: string[] = [
   "5550107788",
   ...headerLine.split(","),
   ...dataLines.flatMap((l) => l.split(",")),
+  CRM_NAME,
+  "CRMFILE-SENTINEL",
+  "WV3K",
+  "Vexmorrow",
+  "Ysolde",
+  "Brannoch",
 ].filter((s) => s.length >= 4);
 
 function variants(s: string): string[] {
@@ -103,7 +117,16 @@ test("processing and exporting a file sends no file data over the network", asyn
   await expect(page.getByTestId("merge-preview")).toContainText("Quillon Zephyrine");
 
   await page.getByRole("button", { name: "Merge", exact: true }).click();
+
+  // The CRM export is compared in the browser too, and neither file leaves it.
+  await page.getByTestId("crm-file-input").setInputFiles({
+    name: CRM_NAME,
+    mimeType: "text/csv",
+    buffer: Buffer.from(CRM_CSV),
+  });
+  await expect(page.getByTestId("crm-compare-status")).toContainText("already in your CRM");
   await goToStep(page, "Export");
+  await expect(page.getByTestId("export-summary")).toContainText("already in your CRM");
   const packLoaded = page.waitForResponse((r) => r.url().endsWith("/api/rule-packs/salesforce"));
   await page.getByLabel("Salesforce").check();
   await packLoaded;

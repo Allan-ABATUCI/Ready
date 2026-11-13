@@ -89,6 +89,8 @@ export interface ExportChanges {
   rowsIn: number;
   rowsOut: number;
   mergedGroups: number;
+  /** Output rows left out because they are already in the CRM. */
+  excludedRows: number;
   /** Changed or unconverted cells in the first `cellRows` output rows, by row then column. */
   cells: CellChange[];
 }
@@ -192,6 +194,7 @@ export function buildExportTable(
       rowsIn: parsed.rows.length,
       rowsOut: merged.rows.length,
       mergedGroups: merged.mergedGroups,
+      excludedRows: merged.excludedRows,
       cells,
     },
   };

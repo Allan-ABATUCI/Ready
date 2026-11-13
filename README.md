@@ -22,6 +22,8 @@ Ready walks the user through four steps (**Upload → Fix → Review → Export*
 3. **Review** — Filter the list of suspected duplicates, compare them side by side and decide what to merge or keep (one by one, in bulk, or with keyboard shortcuts; with undo). Fix flagged cells in place.
 4. **Export** — Preview and download a clean, deduplicated CSV formatted for your chosen CRM, plus a local report of every change clean-up made.
 
+**Save progress** downloads a session file (`<name>.ready.json`) with the data, fixes, merge decisions and settings; drop it back in later to carry on. It is an ordinary file the user keeps: the app stores nothing in the browser.
+
 All matching and validation is **deterministic** and runs **locally**. There are no AI services or external API calls involved in processing your data.
 
 ---

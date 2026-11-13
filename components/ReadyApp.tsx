@@ -6,9 +6,11 @@ import { isRoleColumn, type KeyColumn } from "@/lib/data-plane/columns";
 import type { DateOrder } from "@/lib/data-plane/dates";
 import { applyOverrides } from "@/lib/data-plane/overrides";
 import type { CountryCode } from "@/lib/data-plane/phone";
-import { analyzeInWorker, processFileInWorker } from "@/lib/data-plane/run";
+import { downloadText } from "@/lib/data-plane/export";
+import { analyzeInWorker, processFileInWorker, resumeInWorker } from "@/lib/data-plane/run";
+import { buildSession, isSessionFileName, sessionFileName } from "@/lib/data-plane/session";
 import { sampleFile } from "@/lib/data-plane/sample";
-import { logEvent, toErrorCode } from "@/lib/diagnostics";
+import { logEvent, toErrorCode, type ErrorCode } from "@/lib/diagnostics";
 import type { Stage } from "@/lib/data-plane/types";
 import { loadVerifiedRulePack } from "@/lib/rule-packs/load";
 import { useReadyStore, type AnalysisRequest, type Step } from "@/lib/state/store";
@@ -31,6 +33,12 @@ const STAGE_TEXT: Record<Stage, string> = {
 /** Entrance order of a panel's parts (see `.stagger` in globals.css). */
 const stagger = (i: number) => ({ "--i": i }) as CSSProperties;
 
+const ERROR_TEXT: Partial<Record<ErrorCode, string>> = {
+  session_invalid: "That doesn't look like a saved Ready session.",
+  session_version: "That session was saved by a newer version of Ready. Reload the page and try again.",
+};
+const DEFAULT_ERROR_TEXT = "We couldn't read that file. Is it a CSV?";
+
 const STEP_LABELS: Record<Step, string> = {
   upload: "Upload",
   fix: "Fix",
@@ -51,8 +59,11 @@ function ReadyFlow() {
   // This component renders nearly all of the store, so one subscription is simplest.
   const {
     status,
+    errorCode,
+    fileName,
     step,
     setStep,
+    finishRestore,
     stage,
     result,
     pendingAnalysis,
@@ -113,11 +124,20 @@ function ReadyFlow() {
     }
     startProcessing(file.name);
     try {
-      finishProcessing(await processFileInWorker(file, setStage));
+      if (isSessionFileName(file.name)) finishRestore(await resumeInWorker(file, setStage));
+      else finishProcessing(await processFileInWorker(file, setStage));
     } catch (e) {
-      logEvent({ kind: "error", code: toErrorCode(e) });
-      failProcessing();
+      const code = toErrorCode(e);
+      logEvent({ kind: "error", code });
+      failProcessing(code);
     }
+  };
+
+  /** Download everything needed to pick up later, as a file only the user holds. */
+  const saveSession = () => {
+    if (!result) return;
+    const session = buildSession({ fileName, result, overrides, decisions, crm, exportOptions, step });
+    downloadText(sessionFileName(fileName), JSON.stringify(session), "application/json");
   };
 
   const reanalyze = async (request: AnalysisRequest | null) => {
@@ -213,11 +233,23 @@ function ReadyFlow() {
       <StepNav steps={steps} current={step} onStep={setStep} />
 
       <div className="flex min-h-6 flex-col gap-2">
-        <p role="status" aria-live="polite" className="text-sm text-slate-600" data-testid="status">
-          {(status === "processing" || reanalyzing) && (stage ? STAGE_TEXT[stage] : "Processing in your browser…")}
-          {status === "error" && "We couldn't read that file. Is it a CSV?"}
-          {status === "ready" && !reanalyzing && "Done."}
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p role="status" aria-live="polite" className="text-sm text-slate-600" data-testid="status">
+            {(status === "processing" || reanalyzing) && (stage ? STAGE_TEXT[stage] : "Processing in your browser…")}
+            {status === "error" && ((errorCode && ERROR_TEXT[errorCode]) ?? DEFAULT_ERROR_TEXT)}
+            {status === "ready" && !reanalyzing && "Done."}
+          </p>
+          {ready && (
+            <button
+              type="button"
+              className="animate-pop rounded-lg border bg-white px-3 py-1 text-sm transition hover:-translate-y-0.5 hover:shadow-sm"
+              title="Downloads a file with your data, fixes and decisions. Drop it here later to carry on."
+              onClick={saveSession}
+            >
+              Save progress
+            </button>
+          )}
+        </div>
         {(status === "processing" || reanalyzing) && <ProgressBar stage={stage} />}
       </div>
 

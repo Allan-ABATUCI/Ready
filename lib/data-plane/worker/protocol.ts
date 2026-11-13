@@ -7,9 +7,12 @@ import type {
   ProcessResult,
   Stage,
 } from "../types";
+import type { RestoredSession } from "../session";
 
 export type WorkerRequest =
   | { type: "process"; file: File }
+  /** Read a saved session file and rebuild its analysis. */
+  | { type: "resume"; file: File }
   /** Re-run the input-dependent stages after the user changes an input or edits a cell; the file isn't read again. */
   | { type: "analyze"; parsed: ParsedCsv; profile: ColumnProfile[]; inputs: AnalysisInputs; scope: AnalysisScope };
 
@@ -20,4 +23,7 @@ export type WorkerResponse =
   | { type: "timing"; stage: Stage; ms: number }
   | { type: "processed"; result: ProcessResult }
   | { type: "analyzed"; analysis: AnalysisUpdate }
-  | { type: "error"; code: "parse_failed" | "analyze_failed" };
+  | { type: "restored"; restored: RestoredSession }
+  | { type: "error"; code: WorkerErrorCode };
+
+export type WorkerErrorCode = "parse_failed" | "analyze_failed" | "session_invalid" | "session_version";

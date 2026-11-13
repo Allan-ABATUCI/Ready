@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { answerConfirm, goToStep } from "./steps";
 
@@ -64,4 +65,48 @@ test.describe("with reduced motion", () => {
     expect(first).not.toContain("(0)");
     await expect(issues).toHaveText(first!);
   });
+});
+
+test("saves progress to a file and picks up from it later", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Try a sample file" }).click();
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+  await goToStep(page, "Review");
+  await page.getByRole("button", { name: /Merge all exact matches/ }).click();
+  await expect(page.getByTestId("review-progress")).toContainText(/Reviewed (\d+) of \d+ · \1 to merge/);
+  const progress = await page.getByTestId("review-progress").textContent();
+  await goToStep(page, "Export");
+  await page.getByLabel("Pipedrive").check();
+
+  const saving = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Save progress" }).click();
+  const saved = await saving;
+  expect(saved.url()).toMatch(/^blob:/);
+  expect(saved.suggestedFilename()).toBe("sample-contacts.ready.json");
+  const sessionPath = (await saved.path())!;
+
+  // A fresh page: nothing kept in the browser, everything comes from the file.
+  await page.reload();
+  await expect(page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: /Export/ })).toBeDisabled();
+  // Playwright keeps downloads under a random name, so give it back its own.
+  await page.getByTestId("file-input").setInputFiles({
+    name: saved.suggestedFilename(),
+    mimeType: "application/json",
+    buffer: readFileSync(sessionPath),
+  });
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+  await expect(page.getByTestId("step-export")).toBeVisible();
+  await expect(page.getByLabel("Pipedrive")).toBeChecked();
+  await goToStep(page, "Review");
+  await expect(page.getByTestId("review-progress")).toHaveText(progress!);
+});
+
+test("explains when a dropped file isn't a session it can read", async ({ page }) => {
+  await page.goto("/");
+  await page.getByTestId("file-input").setInputFiles({
+    name: "notes.json",
+    mimeType: "application/json",
+    buffer: Buffer.from('{"hello":"world"}'),
+  });
+  await expect(page.getByTestId("status")).toHaveText("That doesn't look like a saved Ready session.");
 });

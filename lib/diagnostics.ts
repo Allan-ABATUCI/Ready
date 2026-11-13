@@ -17,7 +17,14 @@ import type { RulePackVerificationError } from "@/lib/rule-packs/verify";
 export const DEBUG_STORAGE_KEY = "ready:debug";
 
 /** Every error code the app can surface. Anything else is logged as "unknown". */
-export const ERROR_CODES = ["parse_failed", "analyze_failed", "worker_failed", "unknown"] as const;
+export const ERROR_CODES = [
+  "parse_failed",
+  "analyze_failed",
+  "worker_failed",
+  "session_invalid",
+  "session_version",
+  "unknown",
+] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
 export type RulePackRejection = RulePackVerificationError["code"] | "fetch_failed" | "wrong_crm";

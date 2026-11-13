@@ -4,7 +4,12 @@ import type { CsvRow } from "./types";
 
 /** Trigger a local download via a blob: URL — no network request is made. */
 export function downloadCsv(filename: string, headers: string[], rows: CsvRow[]): void {
-  const blob = new Blob([toCsv(headers, rows)], { type: "text/csv;charset=utf-8" });
+  downloadText(filename, toCsv(headers, rows), "text/csv;charset=utf-8");
+}
+
+/** Save text as a file through a local blob URL: nothing is uploaded. */
+export function downloadText(filename: string, text: string, type: string): void {
+  const blob = new Blob([text], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

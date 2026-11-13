@@ -9,9 +9,10 @@ import type {
   ProcessResult,
   Stage,
 } from "./types";
+import type { RestoredSession } from "./session";
 import type { WorkerRequest, WorkerResponse } from "./worker/protocol";
 
-type Done = Extract<WorkerResponse, { type: "processed" | "analyzed" }>;
+type Done = Extract<WorkerResponse, { type: "processed" | "analyzed" | "restored" }>;
 
 /**
  * Handle one message from the worker: progress goes to `onStage`, timings to
@@ -76,4 +77,11 @@ export async function analyzeInWorker(
   const msg = await runInWorker({ type: "analyze", parsed, profile, inputs, scope }, onStage);
   if (msg.type !== "analyzed") throw new Error("worker_failed");
   return msg.analysis;
+}
+
+/** Read a saved session file off the main thread and rebuild its analysis. */
+export async function resumeInWorker(file: File, onStage?: (stage: Stage) => void): Promise<RestoredSession> {
+  const msg = await runInWorker({ type: "resume", file }, onStage);
+  if (msg.type !== "restored") throw new Error("worker_failed");
+  return msg.restored;
 }

@@ -131,6 +131,11 @@ test("processing and exporting a file sends no file data over the network", asyn
   expect(reportRows.slice(detailStart + 1).some((r) => r[3] === "+44 20 7946 0958")).toBe(true);
   expect(reportNeedles.length).toBeGreaterThan(0);
 
+  // A saved session holds the whole file, so it must be a local blob too, never a request.
+  const sessionDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Save progress" }).click();
+  expect((await sessionDownload).url()).toMatch(/^blob:/);
+
   await page.getByRole("button", { name: "Start over" }).click();
   await page.waitForLoadState("networkidle");
 

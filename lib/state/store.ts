@@ -6,8 +6,10 @@ import { DEFAULT_EXPORT_OPTIONS, type ExportOptions, type SetExportOption } from
 import { assignRole, isRoleColumn, type KeyColumn } from "@/lib/data-plane/columns";
 import { cellKey, type Overrides } from "@/lib/data-plane/overrides";
 import type { DateOrder } from "@/lib/data-plane/dates";
+import { STEP_IDS, type RestoredSession, type SessionStep } from "@/lib/data-plane/session";
 import type { CountryCode } from "@/lib/data-plane/phone";
 import type { AnalysisInputs, AnalysisScope, AnalysisUpdate, ProcessResult, Stage } from "@/lib/data-plane/types";
+import type { ErrorCode } from "@/lib/diagnostics";
 import type { Crm, RulePack, RulePackManifest, RulePackStatus } from "@/lib/rule-packs/types";
 
 /**
@@ -28,8 +30,8 @@ const inputsOf = ({ roles, dateOrder, defaultCountry }: AnalysisInputs): Analysi
 export type Status = "idle" | "processing" | "ready" | "error";
 
 /** The guided flow's steps, in order. */
-export const STEPS = ["upload", "fix", "review", "export"] as const;
-export type Step = (typeof STEPS)[number];
+export const STEPS = STEP_IDS;
+export type Step = SessionStep;
 
 /** Undo steps kept. Each is a full `decisions` snapshot, so this bounds memory on large files. */
 export const HISTORY_LIMIT = 50;
@@ -40,6 +42,8 @@ export const HISTORY_LIMIT = 50;
  */
 export interface ReadyState {
   status: Status;
+  /** Why the last load failed, when `status` is "error". A code only. */
+  errorCode: ErrorCode | null;
   /** The step shown. Only "upload" is reachable until a file is ready. */
   step: Step;
   fileName: string | null;
@@ -74,7 +78,9 @@ export interface ReadyState {
   startProcessing: (fileName: string) => void;
   setStage: (stage: Stage) => void;
   finishProcessing: (result: ProcessResult) => void;
-  failProcessing: () => void;
+  /** Load a saved session: the file, fixes, decisions and settings, on the step it was saved at. */
+  finishRestore: (restored: RestoredSession) => void;
+  failProcessing: (code?: ErrorCode) => void;
   /**
    * Give `role` to column `col` (null: to no column), moving it off any other
    * column. Clears merge decisions, since candidate pairs will change, and
@@ -122,6 +128,7 @@ export interface ReadyState {
 
 const initial = {
   status: "idle" as Status,
+  errorCode: null as ErrorCode | null,
   step: "upload" as Step,
   fileName: null,
   stage: null as Stage | null,
@@ -175,7 +182,21 @@ export const useReadyStore = create<ReadyState>()((set, get) => {
     },
     // A new file starts at the first step that needs the user: checking columns and values.
     finishProcessing: (result) => set({ status: "ready", step: "fix", stage: null, result, overrides: {}, ...cleared }),
-    failProcessing: () => set({ status: "error", stage: null, result: null, pendingAnalysis: null, ...cleared }),
+    finishRestore: ({ fileName, result, overrides, decisions, crm, exportOptions, step }) =>
+      set({
+        ...initial,
+        status: "ready",
+        fileName,
+        result,
+        overrides,
+        decisions,
+        crm,
+        exportOptions,
+        step,
+        rulePackStatus: crm ? "loading" : "idle",
+      }),
+    failProcessing: (errorCode = "unknown") =>
+      set({ status: "error", errorCode, stage: null, result: null, pendingAnalysis: null, ...cleared }),
     setRole: (role, col) => {
       const { result } = get();
       if (!result) return null;

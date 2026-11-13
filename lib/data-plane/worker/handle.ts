@@ -1,6 +1,8 @@
 import "client-only";
 import { decodeCsvBytes } from "../csv";
 import { analyze, checkIssues, processCsv } from "../process";
+import { parseSession, SessionError } from "../session";
+import { restoreSession } from "../session-restore";
 import type { Stage } from "../types";
 import type { WorkerRequest, WorkerResponse } from "./protocol";
 
@@ -28,14 +30,22 @@ export async function handleRequest(req: WorkerRequest, post: (msg: WorkerRespon
       const result = processCsv(text, { encoding, onStage });
       endStage();
       post({ type: "processed", result });
+    } else if (req.type === "resume") {
+      onStage("parsing");
+      const session = parseSession(await req.file.text());
+      const restored = restoreSession(session, onStage);
+      endStage();
+      post({ type: "restored", restored });
     } else {
       const run = req.scope === "all" ? analyze : checkIssues;
       const analysis = run(req.parsed, req.profile, req.inputs, onStage);
       endStage();
       post({ type: "analyzed", analysis });
     }
-  } catch {
-    // Never forward the error message — it could quote file content.
-    post({ type: "error", code: req.type === "process" ? "parse_failed" : "analyze_failed" });
+  } catch (e) {
+    // Never forward the error message — it could quote file content. Codes only.
+    if (e instanceof SessionError) post({ type: "error", code: e.code });
+    else if (req.type === "analyze") post({ type: "error", code: "analyze_failed" });
+    else post({ type: "error", code: req.type === "resume" ? "session_invalid" : "parse_failed" });
   }
 }

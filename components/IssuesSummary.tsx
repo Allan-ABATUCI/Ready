@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { DateOrder } from "@/lib/data-plane/dates";
 import type { CellIssue, CellIssueCode } from "@/lib/data-plane/types";
 import { groupBy } from "@/lib/group";
+import { CountUp } from "./CountUp";
 import { DateOrderSelect } from "./DateOrderSelect";
 
 const LABELS: Record<CellIssueCode, string> = {
@@ -108,7 +109,10 @@ export function IssuesSummary({ headers, rows, issues, onDateOrder, onEdit, busy
   return (
     <section aria-labelledby="issues-heading" className="rounded-xl bg-white p-6 shadow-sm" data-testid="issues">
       <h2 id="issues-heading" className="text-lg font-semibold text-slate-900">
-        Issues <span className="font-normal text-slate-500">({issues.length})</span>
+        Issues{" "}
+        <span className="font-normal text-slate-500">
+          (<CountUp value={issues.length} />)
+        </span>
       </h2>
 
       {onDateOrder && hasAmbiguousDates && (

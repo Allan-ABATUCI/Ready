@@ -40,8 +40,11 @@ export function FileDrop({ onFile, disabled = false }: FileDropProps) {
       }}
       onDragLeave={() => setOver(false)}
       onDrop={onDrop}
-      className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-10 text-center transition-colors ${
-        over ? "border-emerald-500 bg-emerald-50" : "border-slate-300 bg-white hover:border-slate-400"
+      data-over={over || undefined}
+      className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-10 text-center transition duration-200 ease-out ${
+        over
+          ? "scale-[1.01] border-emerald-500 bg-emerald-50 shadow-[0_0_0_6px_rgb(16_185_129/0.15)]"
+          : "border-slate-300 bg-white hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-sm"
       } ${inactive ? "pointer-events-none opacity-60" : ""}`}
     >
       <span className="text-lg font-medium text-slate-800">

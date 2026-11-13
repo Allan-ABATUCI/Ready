@@ -65,6 +65,14 @@ describe("ExportPanel", () => {
       [["Avery Example", "AVERY@example.test"]],
     );
   });
+
+  it("confirms the download, but only once one has started", async () => {
+    render(<Harness download={vi.fn()} />);
+    expect(screen.getByTestId("download-status")).toBeEmptyDOMElement();
+    await userEvent.click(screen.getByLabelText("HubSpot"));
+    await userEvent.click(screen.getByRole("button", { name: "Download CSV" }));
+    expect(screen.getByTestId("download-status")).toHaveTextContent("Downloaded. Your file is ready to import.");
+  });
 });
 
 type Download = (filename: string, headers: string[], rows: string[][]) => void;

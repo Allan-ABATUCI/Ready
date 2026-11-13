@@ -4,3 +4,68 @@ body {
   @apply bg-slate-50 text-slate-900 antialiased;
   font-family: ui-sans-serif, system-ui, sans-serif; /* system fonts only: no font CDN calls */
 }
+
+/*
+ * Motion: short, transform/opacity only, and off for people who ask for less
+ * motion. Durations stay within 150–300 ms so nothing waits on an animation.
+ */
+@theme {
+  --animate-rise: rise 220ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  --animate-pop: pop 180ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  --animate-draw: draw 300ms ease-out 60ms both;
+  --animate-shimmer: shimmer 1.2s linear infinite;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes draw {
+    from {
+      stroke-dashoffset: 24;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  @keyframes shimmer {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(250%);
+    }
+  }
+}
+
+/* Staggered entrance for a panel's sections: set --i on each child. */
+.stagger > * {
+  animation: var(--animate-rise);
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

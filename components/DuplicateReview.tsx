@@ -14,6 +14,7 @@ import {
   type PairSort,
 } from "@/lib/data-plane/review";
 import type { DuplicateCandidate, MatchField, ParsedCsv } from "@/lib/data-plane/types";
+import { CountUp } from "./CountUp";
 import { MergePreview } from "./MergePreview";
 import { PAGE_SIZE, PairList, STATUS_LABELS, type PairRow } from "./PairList";
 
@@ -133,7 +134,10 @@ export function DuplicateReview({
       data-testid="duplicate-review"
     >
       <h2 id="dupes-heading" className="text-lg font-semibold text-slate-900">
-        Possible duplicates <span className="font-normal text-slate-500">({candidates.length})</span>
+        Possible duplicates{" "}
+        <span className="font-normal text-slate-500">
+          (<CountUp value={candidates.length} />)
+        </span>
       </h2>
 
       {skippedLargeBlocks > 0 && (
@@ -283,7 +287,11 @@ export function DuplicateReview({
               >
                 Keep separate
               </button>
-              <span data-testid="pair-status" className="text-slate-600">
+              <span
+                key={decision?.action ?? "undecided"}
+                data-testid="pair-status"
+                className="animate-pop text-slate-600"
+              >
                 {STATUS_LABELS[decision?.action ?? "undecided"]}
               </span>
             </div>

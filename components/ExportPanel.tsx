@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { buildChangeReport, CHANGE_LABELS } from "@/lib/data-plane/change-report";
 import { CRM_LABELS, sourceColumns } from "@/lib/data-plane/crm-mapping";
 import { downloadCsv } from "@/lib/data-plane/export";
@@ -83,6 +83,15 @@ export function ExportPanel({
     });
     return out;
   }, [table]);
+
+  // Bumped on each download, so the confirmation animates again every time.
+  const [downloads, setDownloads] = useState(0);
+
+  const downloadCleanCsv = () => {
+    if (!table || !crm) return;
+    download(`ready-${crm}.csv`, table.headers, table.rows);
+    setDownloads((n) => n + 1);
+  };
 
   const downloadReport = () => {
     if (!crm) return;
@@ -222,7 +231,7 @@ export function ExportPanel({
         type="button"
         disabled={!table || !crm}
         className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
-        onClick={() => table && crm && download(`ready-${crm}.csv`, table.headers, table.rows)}
+        onClick={downloadCleanCsv}
       >
         Download CSV
       </button>
@@ -235,6 +244,33 @@ export function ExportPanel({
         Download change report
       </button>
       {!crm && <span className="ml-3 text-sm text-slate-500">Pick a CRM first.</span>}
+      <p role="status" className="mt-3 h-6 text-sm text-emerald-700" data-testid="download-status">
+        {downloads > 0 && (
+          <span key={downloads} className="inline-flex animate-rise items-center gap-1.5">
+            <DrawnCheck />
+            Downloaded. Your file is ready to import.
+          </span>
+        )}
+      </p>
     </section>
+  );
+}
+
+/** A checkmark whose stroke draws in (see --animate-draw in globals.css). */
+function DrawnCheck() {
+  return (
+    <svg viewBox="0 0 20 20" className="h-5 w-5" aria-hidden="true">
+      <circle cx="10" cy="10" r="9" className="fill-emerald-100" />
+      <path
+        d="M5.5 10.5l3 3 6-7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeDasharray="24"
+        className="animate-draw"
+      />
+    </svg>
   );
 }

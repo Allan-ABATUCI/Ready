@@ -29,7 +29,8 @@ Unit and component tests sit next to the code they test (`*.test.ts`, `*.test.ts
 
 ## Data plane (browser)
 
-- Parses, profiles, validates, matches and exports files entirely client side. Heavy work runs in a Web Worker (`src/lib/data-plane/worker/`) so the page stays responsive on large files.
+- Parses, profiles, validates, matches and exports files entirely client side.
+- Several files can be combined into one list (`src/lib/data-plane/combine.ts`): the worker reads each file, the user confirms a column mapping, and the rows are stacked in file order. Which file each row came from is kept beside the data (`ParsedCsv.sources`), never as a column, so it doesn't affect matching or validation; it is shown in review and can be added to the export. Heavy work runs in a Web Worker (`src/lib/data-plane/worker/`) so the page stays responsive on large files.
 - **Deterministic:** the same input and the same rule pack always produce the same output. No randomness, no time-dependent results, no reliance on unordered iteration.
 - **No external services:** matching and validation are local code. No AI calls, enrichment or verification APIs, or remote lookups.
 - Fuzzball is always called with `force_ascii: false` (otherwise non-ASCII characters are stripped) and never with `useCollator` (locale dependent, so not deterministic).

@@ -13,6 +13,7 @@ No upload. No account. No SQL or code. **Your data never leaves your browser.**
 Ready walks the user through four steps (**Upload → Fix → Review → Export**), with a built-in synthetic sample file for a first try.
 
 1. **Profile** — Drop in a CSV, TSV or Excel file (`.xlsx`, first sheet), or paste rows copied from a spreadsheet. Ready reads it in the browser and summarizes columns, fill rates, and value patterns.
+   - **Several files** (e.g. a trade-show list, a webinar export and a spreadsheet) are combined into one list. Ready proposes how their columns line up, matching the same or similar names (`E-mail` with `Email`, `Mobile` with `Phone`), and the user confirms or changes it before combining. Duplicates are then found across files, review shows which file each contact came from, and the export can add a "Source file" column.
 2. **Flag issues**
    - **Duplicates** — fuzzy matching on name, email, phone (national and international formats), and company
    - **Malformed values** — invalid emails, phone numbers, and dates (day-first, month-first or ISO); ambiguous dates

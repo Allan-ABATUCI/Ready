@@ -86,7 +86,7 @@ Only these responsibilities:
 
 Unit tests sit next to the code they test. Imports use `@/` for `src/`, plus `@tests/` and `@rule-packs/` for those root folders.
 
-Before writing a helper, check for an existing one: `groupBy` (`src/lib/group.ts`), `FORMAT_VALIDATORS` (`validate.ts`), `splitName`/`joinName` (`names.ts`), `assignRole` (`columns.ts`), `analyze` (`process.ts`), `toE164` (`phone.ts`), `parseDate` (`dates.ts`), `logEvent` (`src/lib/diagnostics.ts`).
+Before writing a helper, check for an existing one: `groupBy` (`src/lib/group.ts`), `FORMAT_VALIDATORS` (`validate.ts`), `splitName`/`joinName` (`names.ts`), `assignRole` (`columns.ts`), `analyze` (`process.ts`), `toE164` (`phone.ts`), `parseDate` (`dates.ts`), `combineTables` / `proposeMapping` (`combine.ts`), `describeRow` (`sources.ts`), `logEvent` (`src/lib/diagnostics.ts`).
 
 ## Working rules
 

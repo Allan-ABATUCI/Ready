@@ -71,6 +71,8 @@ Ready is split into two planes with a hard boundary between them.
 
 Rule packs are signed so the browser can verify they have not been tampered with before applying them.
 
+More detail, including how the boundary is enforced: [docs/architecture.md](docs/architecture.md).
+
 ---
 
 ## Privacy guarantee
@@ -88,6 +90,17 @@ Every outbound call is documented in this repository and covered by an automated
 ---
 
 ## Development workflow
+
+### Project conventions
+
+| Convention                                                                                  | Status      | Where                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Git workflow: `main` = production, `develop` = integration, `feature/<name>` from `develop` | ✅ Followed | [Branches](#branches)                                                                                                                                                                                             |
+| Conventional Commits (`feat`, `fix`, `docs`, `refactor`, `test`, `chore`)                   | ✅ Followed | [Commits](#commits)                                                                                                                                                                                               |
+| Project structure: `src/`, `tests/`, `docs/`                                                | ✅ In place | See [Layout](#layout)                                                                                                                                                                                             |
+| Development environment is a DevContainer                                                   | ✅ In place | `.devcontainer/devcontainer.json` (Node 24, installs dependencies and Playwright Chromium, editor extensions)                                                                                                     |
+| Application deployed with Docker                                                            | ✅ In place | `Dockerfile` + `docker-compose.yml`, smoke-tested in CI (`npm run test:docker`). Production hosting is Vercel; see [docs/deployment.md](docs/deployment.md)                                                       |
+| No secrets in code: environment variables, `.env` gitignored, versioned `.env.example`      | ✅ In place | Secrets are read from `process.env`; `.env` and `.env*.local` are gitignored and kept out of the Docker image; `.env.example` is committed. See [environment variables](docs/deployment.md#environment-variables) |
 
 ### Branches
 
@@ -117,7 +130,7 @@ fix(export): preserve leading zeros in postal codes
   - the full test suite
   - lint
   - build
-- CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit tests and E2E (which includes the build and the privacy test) on every pull request and push to `develop` and `main`. The Playwright report is uploaded as an artifact when it fails.
+- CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit tests and E2E (which includes the build and the privacy test) on every pull request and push to `develop` and `main`, and a second job builds and smoke-tests the Docker image. The Playwright report is uploaded as an artifact when it fails.
 - Any change that adds or modifies an outbound network call must also:
   - document the call in the [outbound calls registry](#outbound-calls-registry)
   - include a test asserting that no file data is sent
@@ -126,25 +139,25 @@ fix(export): preserve leading zeros in postal codes
 
 Every network call the app makes must be listed here.
 
-**Browser → network** (all browser calls live in `lib/control-plane-client/`; ESLint blocks `fetch`/XHR/WebSocket/beacons elsewhere, and the production CSP sets `connect-src 'self'`):
+**Browser → network** (all browser calls live in `src/lib/control-plane-client/`; ESLint blocks `fetch`/XHR/WebSocket/beacons elsewhere, and the production CSP sets `connect-src 'self'`):
 
-| Call                                                         | Destination                                                               | Payload                                                                                                                                                                                                                   | Test                                                                                                           |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Rule-pack manifest                                           | `GET /api/rule-packs/manifest` (same origin)                              | None: no query string, no body, `credentials: "omit"`. Response: `{ packs: [{ crm, version }] }`                                                                                                                          | `e2e/privacy.spec.ts`                                                                                          |
-| Signed rule pack                                             | `GET /api/rule-packs/<crm>` (same origin), sent when the user picks a CRM | Only the CRM identifier in the path (`hubspot`, `salesforce` or `pipedrive`), chosen by the user. No query string, no body, `credentials: "omit"`. Response: `{ payload, signature }`, verified in the browser before use | `e2e/privacy.spec.ts`, `lib/control-plane-client/rule-packs.test.ts`, `app/api/rule-packs/[crm]/route.test.ts` |
-| License verify _(endpoint exists, not yet called by the UI)_ | `POST /api/license/verify` (same origin)                                  | `{ "licenseKey": string }`, exactly one field, ≤ 256 bytes. Anything else gets a 400 or 413                                                                                                                               | `app/api/license/verify/route.test.ts`; add the call to `e2e/privacy.spec.ts` when the UI wires it up          |
+| Call                                                         | Destination                                                               | Payload                                                                                                                                                                                                                   | Test                                                                                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Rule-pack manifest                                           | `GET /api/rule-packs/manifest` (same origin)                              | None: no query string, no body, `credentials: "omit"`. Response: `{ packs: [{ crm, version }] }`                                                                                                                          | `tests/e2e/privacy.spec.ts`                                                                                                  |
+| Signed rule pack                                             | `GET /api/rule-packs/<crm>` (same origin), sent when the user picks a CRM | Only the CRM identifier in the path (`hubspot`, `salesforce` or `pipedrive`), chosen by the user. No query string, no body, `credentials: "omit"`. Response: `{ payload, signature }`, verified in the browser before use | `tests/e2e/privacy.spec.ts`, `src/lib/control-plane-client/rule-packs.test.ts`, `src/app/api/rule-packs/[crm]/route.test.ts` |
+| License verify _(endpoint exists, not yet called by the UI)_ | `POST /api/license/verify` (same origin)                                  | `{ "licenseKey": string }`, exactly one field, ≤ 256 bytes. Anything else gets a 400 or 413                                                                                                                               | `src/app/api/license/verify/route.test.ts`; add the call to `tests/e2e/privacy.spec.ts` when the UI wires it up              |
 
-**Server → network** (Next.js API routes on Vercel; never handle file data, and ESLint blocks them from importing `lib/data-plane/`):
+**Server → network** (Next.js API routes on Vercel or in the Docker image; never handle file data, and ESLint blocks them from importing `src/lib/data-plane/`):
 
-| Call             | Destination                        | Payload                                      | Test                                        |
-| ---------------- | ---------------------------------- | -------------------------------------------- | ------------------------------------------- |
-| Edge Config read | Vercel Edge Config (`EDGE_CONFIG`) | Reads the single item key `rulePackManifest` | `app/api/rule-packs/manifest/route.test.ts` |
+| Call             | Destination                        | Payload                                      | Test                                            |
+| ---------------- | ---------------------------------- | -------------------------------------------- | ----------------------------------------------- |
+| Edge Config read | Vercel Edge Config (`EDGE_CONFIG`) | Reads the single item key `rulePackManifest` | `src/app/api/rule-packs/manifest/route.test.ts` |
 
 **Inbound only** (not outbound, listed for completeness):
 
-| Call           | Source                              | Payload                                                                                                 | Test                                   |
-| -------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| Stripe webhook | Stripe → `POST /api/stripe/webhook` | Stripe event, signature-verified with `STRIPE_WEBHOOK_SECRET`. No customer file data exists server-side | `app/api/stripe/webhook/route.test.ts` |
+| Call           | Source                              | Payload                                                                                                 | Test                                       |
+| -------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Stripe webhook | Stripe → `POST /api/stripe/webhook` | Stripe event, signature-verified with `STRIPE_WEBHOOK_SECRET`. No customer file data exists server-side | `src/app/api/stripe/webhook/route.test.ts` |
 
 ---
 
@@ -170,42 +183,34 @@ Open the dev server at `http://localhost:3000` (or `127.0.0.1:3000`). Through a 
 | Lint and format check           | `npm run lint` (`npm run lint:fix` to fix)                  |
 | Type check                      | `npm run typecheck`                                         |
 | Production build                | `npm run build` (output in `.next/`)                        |
+| Docker image smoke test         | `npm run test:docker` (needs Docker)                        |
 
 ### Layout
 
 ```
-app/                     Next.js App Router. page.tsx renders the client app (prerendered static)
-app/api/                 Control plane: license/verify, rule-packs/manifest, stripe/webhook
-components/              Client components (FileDrop, ProfileSummary, DuplicateReview, MergePreview)
-lib/data-plane/          Browser-only CSV parsing, profiling, validation, dedupe, export, Web Worker
-lib/control-plane/       Server-only helpers for the API routes
-lib/control-plane-client/ The only browser module allowed to make network requests
-lib/rule-packs/          Rule-pack types, public key, signature verification (ECDSA P-256, fails closed)
-rule-packs/              Rule-pack sources (src/) and signed output (signed/), see "Rule packs" below
-scripts/rule-packs.mjs   Key generation and signing for rule packs
-lib/state/               Zustand store (in-memory only, never persisted)
-e2e/                     Playwright tests (privacy.spec.ts enforces the privacy invariant)
-tests/fixtures/          Synthetic CSV fixtures
+src/app/          Next.js page; api/ holds the API routes (control plane)
+src/components/   React client components
+src/lib/          data-plane/ (browser only), control-plane/ (server only), control-plane-client/, rule-packs/, state/
+tests/            e2e/ (Playwright, incl. privacy.spec.ts), fixtures/, support/; unit tests sit next to the code
+rule-packs/       Rule-pack sources and signed copies
+scripts/          Rule-pack signing, Docker smoke test
+docs/             Architecture, rule packs, debugging, deployment
 ```
 
-### Debugging
-
-Diagnostics never contain file data: no cell values, column names, file names, row counts or error messages, only fixed codes and timings.
-
-- **Browser** (`lib/diagnostics.ts`): stage timings, error codes and rule-pack results go to `console.debug` as `[ready] {...}` lines. They're on in development. In production, run `localStorage.setItem("ready:debug", "1")` in the console and reload. Nothing is sent over the network.
-- **Server** (`lib/control-plane/log.ts`): each API request writes one JSON line (`route`, `status`, `code`, `ms`) to stdout, which Vercel captures. License keys, bodies, headers and Stripe payloads are never logged.
-
-### Rule packs
-
-Each CRM's required fields and formats live in `rule-packs/src/<crm>.json`. The API serves the signed copies in `rule-packs/signed/`, and the browser rejects any pack whose signature doesn't verify against `lib/rule-packs/public-key.ts`.
-
-To change a pack, edit the source, bump its `version` (and the matching entry in `DEFAULT_MANIFEST`), then re-sign:
+### Run with Docker
 
 ```bash
-node scripts/rule-packs.mjs sign      # needs .keys/rule-pack.private.jwk or RULE_PACK_PRIVATE_KEY
+docker compose up --build         # production build at http://localhost:3000
 ```
 
-`lib/rule-packs/bundled.test.ts` fails if a signed pack is stale or doesn't verify. The private key is never committed (`.keys/` is gitignored). To rotate the key, run `node scripts/rule-packs.mjs keygen`, paste the printed public JWK into `public-key.ts`, and re-sign.
+Production is hosted on Vercel, which builds from source and doesn't use the Dockerfile. See [docs/deployment.md](docs/deployment.md).
+
+### Documentation
+
+- [Architecture](docs/architecture.md): the two planes, repository layout, how the privacy boundary is enforced
+- [Rule packs](docs/rule-packs.md): editing, signing and key rotation
+- [Debugging](docs/debugging.md): privacy-safe diagnostics in the browser and on the server
+- [Deployment](docs/deployment.md): Vercel, Docker, environment variables
 
 ## License
 

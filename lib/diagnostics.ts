@@ -23,6 +23,9 @@ export const ERROR_CODES = [
   "worker_failed",
   "session_invalid",
   "session_version",
+  "xlsx_invalid",
+  "xlsx_too_large",
+  "xlsx_empty",
   "unknown",
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];

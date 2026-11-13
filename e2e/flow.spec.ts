@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import { buildXlsx } from "../tests/support/xlsx";
 import { answerConfirm, goToStep } from "./steps";
 
 test("walks the sample file through all four steps", async ({ page }) => {
@@ -109,4 +110,39 @@ test("explains when a dropped file isn't a session it can read", async ({ page }
     buffer: Buffer.from('{"hello":"world"}'),
   });
   await expect(page.getByTestId("status")).toHaveText("That doesn't look like a saved Ready session.");
+});
+
+test("reads an Excel workbook, dates included", async ({ page }) => {
+  await page.goto("/");
+  await page.getByTestId("file-input").setInputFiles({
+    name: "contacts.xlsx",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: Buffer.from(
+      buildXlsx([
+        ["First Name", "Last Name", "Email", "Signup Date"],
+        ["Zoë", "Müller", "zoe@example.test", { date: 45306 }],
+        ["zoë", "müller", "ZOE@example.test", { date: 45351 }],
+      ]),
+    ),
+  });
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+  await expect(page.getByRole("heading", { name: /Columns/ })).toContainText("2 rows");
+  await goToStep(page, "Review");
+  await expect(page.getByRole("heading", { name: /Possible duplicates/ })).toContainText("(1)");
+  await goToStep(page, "Export");
+  await page.getByLabel("HubSpot").check();
+  await expect(page.getByTestId("export-preview")).toContainText("2024-02-29");
+});
+
+test("takes rows pasted from a spreadsheet", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Paste from a spreadsheet" }).click();
+  await page
+    .getByLabel(/Paste rows here/)
+    .fill("Full Name\tEmail\nAvery Example\tavery@example.test\navery example\tAVERY@EXAMPLE.TEST");
+  await page.getByRole("button", { name: "Use pasted rows" }).click();
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+  await expect(page.getByRole("heading", { name: /Columns/ })).toContainText("2 rows");
+  await goToStep(page, "Review");
+  await expect(page.getByRole("heading", { name: /Possible duplicates/ })).toContainText("(1)");
 });

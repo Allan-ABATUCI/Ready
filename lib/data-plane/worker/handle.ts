@@ -1,10 +1,22 @@
 import "client-only";
-import { decodeCsvBytes } from "../csv";
-import { analyze, checkIssues, processCsv } from "../process";
+import { decodeCsvBytes, parseCsv } from "../csv";
+import { analyze, checkIssues, processParsed } from "../process";
 import { parseSession, SessionError } from "../session";
 import { restoreSession } from "../session-restore";
-import type { Stage } from "../types";
+import { looksLikeXlsx, readXlsx, XlsxError } from "../xlsx";
+import type { ParsedCsv, Stage } from "../types";
 import type { WorkerRequest, WorkerResponse } from "./protocol";
+
+/** A CSV/TSV or .xlsx file's bytes as a table. Told apart by content, not name: a renamed workbook still reads. */
+export function readTable(bytes: Uint8Array): ParsedCsv {
+  if (looksLikeXlsx(bytes)) {
+    const { headers, rows } = readXlsx(bytes);
+    return { headers, rows, delimiter: "", hadBom: false, encoding: "utf-8", issues: [] };
+  }
+  // Bytes, not file.text(): text() always assumes UTF-8, and Excel often saves Windows-1252.
+  const { text, encoding } = decodeCsvBytes(bytes);
+  return parseCsv(text, encoding);
+}
 
 /**
  * Handle one worker request, reporting progress, per-stage timings and the
@@ -25,9 +37,9 @@ export async function handleRequest(req: WorkerRequest, post: (msg: WorkerRespon
 
   try {
     if (req.type === "process") {
-      // Bytes, not file.text(): text() always assumes UTF-8, and Excel often saves Windows-1252.
-      const { text, encoding } = decodeCsvBytes(new Uint8Array(await req.file.arrayBuffer()));
-      const result = processCsv(text, { encoding, onStage });
+      onStage("parsing");
+      const parsed = readTable(new Uint8Array(await req.file.arrayBuffer()));
+      const result = processParsed(parsed, { onStage });
       endStage();
       post({ type: "processed", result });
     } else if (req.type === "resume") {
@@ -44,7 +56,7 @@ export async function handleRequest(req: WorkerRequest, post: (msg: WorkerRespon
     }
   } catch (e) {
     // Never forward the error message — it could quote file content. Codes only.
-    if (e instanceof SessionError) post({ type: "error", code: e.code });
+    if (e instanceof SessionError || e instanceof XlsxError) post({ type: "error", code: e.code });
     else if (req.type === "analyze") post({ type: "error", code: "analyze_failed" });
     else post({ type: "error", code: req.type === "resume" ? "session_invalid" : "parse_failed" });
   }

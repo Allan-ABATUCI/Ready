@@ -26,4 +26,11 @@ export type WorkerResponse =
   | { type: "restored"; restored: RestoredSession }
   | { type: "error"; code: WorkerErrorCode };
 
-export type WorkerErrorCode = "parse_failed" | "analyze_failed" | "session_invalid" | "session_version";
+export type WorkerErrorCode =
+  | "parse_failed"
+  | "analyze_failed"
+  | "session_invalid"
+  | "session_version"
+  | "xlsx_invalid"
+  | "xlsx_too_large"
+  | "xlsx_empty";

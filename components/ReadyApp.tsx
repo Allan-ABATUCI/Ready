@@ -18,6 +18,7 @@ import { ConfirmProvider, useConfirm } from "./ConfirmDialog";
 import { DuplicateReview } from "./DuplicateReview";
 import { ExportPanel } from "./ExportPanel";
 import { FileDrop } from "./FileDrop";
+import { PasteBox } from "./PasteBox";
 import { IssuesSummary } from "./IssuesSummary";
 import { ProfileSummary } from "./ProfileSummary";
 import { ProgressBar } from "./ProgressBar";
@@ -36,8 +37,11 @@ const stagger = (i: number) => ({ "--i": i }) as CSSProperties;
 const ERROR_TEXT: Partial<Record<ErrorCode, string>> = {
   session_invalid: "That doesn't look like a saved Ready session.",
   session_version: "That session was saved by a newer version of Ready. Reload the page and try again.",
+  xlsx_invalid: "We couldn't read that Excel file. Try saving it again, or as CSV.",
+  xlsx_too_large: "That Excel file is too large to open in the browser. Save it as CSV and try again.",
+  xlsx_empty: "That Excel file's first sheet is empty.",
 };
-const DEFAULT_ERROR_TEXT = "We couldn't read that file. Is it a CSV?";
+const DEFAULT_ERROR_TEXT = "We couldn't read that file. Is it a CSV or Excel file?";
 
 const STEP_LABELS: Record<Step, string> = {
   upload: "Upload",
@@ -269,6 +273,7 @@ function ReadyFlow() {
             >
               Try a sample file
             </button>
+            <PasteBox onFile={(file) => void onFile(file)} disabled={status === "processing"} />
             {ready && (
               <button
                 type="button"

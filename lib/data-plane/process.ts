@@ -44,12 +44,16 @@ export function analyze(
  * to those detected from the headers, and the date order to the one the date
  * columns' values settle (see `detectDateOrder`), and there is no default phone country.
  */
-export function processCsv(
-  text: string,
-  { encoding, roles, dateOrder, defaultCountry = null, onStage }: ProcessOptions = {},
-): ProcessResult {
+export function processCsv(text: string, { encoding, onStage, ...rest }: ProcessOptions = {}): ProcessResult {
   onStage?.("parsing");
-  const parsed = parseCsv(text, encoding);
+  return processParsed(parseCsv(text, encoding), { ...rest, onStage });
+}
+
+/** The pipeline after parsing, for files that aren't CSV text (e.g. Excel workbooks). */
+export function processParsed(
+  parsed: ParsedCsv,
+  { roles, dateOrder, defaultCountry = null, onStage }: Omit<ProcessOptions, "encoding"> = {},
+): ProcessResult {
   onStage?.("profiling");
   const profile = profileColumns(parsed);
   const usedRoles = roles ?? detectKeyColumns(parsed.headers);

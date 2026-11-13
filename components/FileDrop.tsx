@@ -48,13 +48,14 @@ export function FileDrop({ onFile, disabled = false }: FileDropProps) {
       } ${inactive ? "pointer-events-none opacity-60" : ""}`}
     >
       <span className="text-lg font-medium text-slate-800">
-        {hydrated ? "Drop a CSV file or a saved session here, or click to choose one" : "Loading…"}
+        {hydrated ? "Drop a CSV or Excel file here, or click to choose one" : "Loading…"}
       </span>
       <span className="mt-1 text-sm text-slate-500">Your file is processed in this browser and never uploaded.</span>
+      <span className="mt-1 text-xs text-slate-400">CSV, TSV, Excel (.xlsx, first sheet) or a saved Ready session</span>
       <input
         id={inputId}
         type="file"
-        accept=".csv,text/csv,.json,application/json"
+        accept=".csv,text/csv,.tsv,.txt,text/tab-separated-values,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.json,application/json"
         className="sr-only"
         disabled={inactive}
         data-testid="file-input"

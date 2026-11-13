@@ -12,7 +12,7 @@ No upload. No account. No SQL or code. **Your data never leaves your browser.**
 
 Ready walks the user through four steps (**Upload → Fix → Review → Export**), with a built-in synthetic sample file for a first try.
 
-1. **Profile** — Drop in a CSV. Ready reads it in the browser and summarizes columns, fill rates, and value patterns.
+1. **Profile** — Drop in a CSV, TSV or Excel file (`.xlsx`, first sheet), or paste rows copied from a spreadsheet. Ready reads it in the browser and summarizes columns, fill rates, and value patterns.
 2. **Flag issues**
    - **Duplicates** — fuzzy matching on name, email, phone (national and international formats), and company
    - **Malformed values** — invalid emails, phone numbers, and dates (day-first, month-first or ISO); ambiguous dates
@@ -150,7 +150,7 @@ Every network call the app makes must be listed here.
 
 ## Getting started
 
-**Stack:** Next.js (App Router) + TypeScript, React, Tailwind CSS, Zustand, PapaParse, Fuzzball, TanStack Table, Vercel Edge Config, Stripe (webhook only), Vitest + React Testing Library, Playwright, ESLint + Prettier.
+**Stack:** Next.js (App Router) + TypeScript, React, Tailwind CSS, Zustand, PapaParse, fflate (unzipping `.xlsx` locally), Fuzzball, TanStack Table, Vercel Edge Config, Stripe (webhook only), Vitest + React Testing Library, Playwright, ESLint + Prettier.
 
 Requires Node ≥ 20.9 (Node 24 recommended, see `.nvmrc`). You can also open the repo in the **DevContainer** (`.devcontainer/`), which installs dependencies and Playwright Chromium for you.
 

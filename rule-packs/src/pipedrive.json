@@ -1,0 +1,6 @@
+{
+  "crm": "pipedrive",
+  "version": "1.0.0",
+  "requiredFields": ["Name"],
+  "formats": { "Email": "email", "Phone": "phone" }
+}

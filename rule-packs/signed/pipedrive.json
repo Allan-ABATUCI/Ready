@@ -1,0 +1,4 @@
+{
+  "payload": "{\"crm\":\"pipedrive\",\"version\":\"1.0.0\",\"requiredFields\":[\"Name\"],\"formats\":{\"Email\":\"email\",\"Phone\":\"phone\"}}",
+  "signature": "gLU5n26mYh34FSwBLy5Rz12RsL8a6LYJkJ9wkOlOnqdK7htRwsKG+28+/GHRKZ01gZKAu5ZOjY34NClU1hBJvg=="
+}

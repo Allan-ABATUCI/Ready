@@ -1,0 +1,13 @@
+# Run the production build locally in a container: `docker compose up --build`,
+# then open http://localhost:3000. See docs/deployment.md.
+services:
+  web:
+    build: .
+    image: ready:local
+    ports:
+      - "3000:3000"
+    # Optional server-side settings (EDGE_CONFIG, STRIPE_WEBHOOK_SECRET); see .env.example.
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { syntheticContacts } from "../tests/support/synthetic";
+import { syntheticContacts } from "../support/synthetic";
 import { goToStep } from "./steps";
 
 /**

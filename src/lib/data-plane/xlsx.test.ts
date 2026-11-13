@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
-import { buildXlsx } from "@/tests/support/xlsx";
+import { buildXlsx } from "@tests/support/xlsx";
 import { handleRequest } from "./worker/handle";
 import type { WorkerResponse } from "./worker/protocol";
 import {

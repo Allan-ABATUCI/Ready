@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { buildXlsx } from "../tests/support/xlsx";
+import { buildXlsx } from "../support/xlsx";
 import { answerConfirm, goToStep } from "./steps";
 
 test("walks the sample file through all four steps", async ({ page }) => {

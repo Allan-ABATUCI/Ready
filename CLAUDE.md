@@ -21,10 +21,11 @@ Status: scaffolded. Stack: Next.js (App Router) + TypeScript, React, Tailwind CS
 
 Where code goes:
 
-- `lib/data-plane/`: everything that touches file data. Browser only (`import "client-only"`); heavy work runs in the Web Worker.
-- `lib/control-plane-client/`: the **only** browser code allowed to make network requests (ESLint-enforced).
-- `app/api/**` + `lib/control-plane/`: server only (`import "server-only"`); ESLint forbids importing `lib/data-plane/`, `papaparse` or `fuzzball`.
-- `e2e/privacy.spec.ts`: must stay green; extend it for every new outbound call.
+- `src/lib/data-plane/`: everything that touches file data. Browser only (`import "client-only"`); heavy work runs in the Web Worker.
+- `src/lib/control-plane-client/`: the **only** browser code allowed to make network requests (ESLint-enforced).
+- `src/app/api/**` + `src/lib/control-plane/`: server only (`import "server-only"`); ESLint forbids importing `src/lib/data-plane/`, `papaparse` or `fuzzball`.
+- `tests/e2e/privacy.spec.ts`: must stay green; extend it for every new outbound call.
+- Unit tests sit next to the code they test (`*.test.ts[x]`); E2E specs, fixtures and shared test helpers live in `tests/`. Imports use `@/` for `src/`, `@tests/` and `@rule-packs/`.
 - Fuzzball: always pass `force_ascii: false` (otherwise non-ASCII is stripped) and never `useCollator` (locale-dependent, so not deterministic).
 
 ## Architecture

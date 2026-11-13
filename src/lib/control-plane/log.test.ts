@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { captureRequestLog } from "@/tests/support/request-log";
+import { captureRequestLog } from "@tests/support/request-log";
 import { failWith, logged, logRequest, type RequestLog } from "./log";
 
 afterEach(() => vi.restoreAllMocks());

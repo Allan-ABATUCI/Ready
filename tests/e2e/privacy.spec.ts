@@ -14,7 +14,7 @@ import { expect, test, type Request } from "@playwright/test";
 import Papa from "papaparse";
 import { goToStep } from "./steps";
 
-const FIXTURE = path.join(__dirname, "..", "tests", "fixtures", "privacy-sentinel.csv");
+const FIXTURE = path.join(__dirname, "..", "fixtures", "privacy-sentinel.csv");
 // A distinctive file name, so we can assert it never leaves the browser either.
 const UPLOAD_NAME = "acme-leads-FILENAME-SENTINEL-QZ7X.csv";
 
@@ -100,7 +100,7 @@ test("processing and exporting a file sends no file data over the network", asyn
   page.on("websocket", (ws) => sockets.push(ws.url()));
   page.on("console", (msg) => consoleLines.push(msg.text()));
   page.on("pageerror", (err) => consoleLines.push(`${err.name}: ${err.message}`));
-  // Turn on the production debug log (lib/diagnostics.ts), so its output is checked too.
+  // Turn on the production debug log (src/lib/diagnostics.ts), so its output is checked too.
   await context.addInitScript(() => localStorage.setItem("ready:debug", "1"));
 
   const manifestLoaded = page.waitForResponse((r) => r.url().endsWith("/api/rule-packs/manifest"));

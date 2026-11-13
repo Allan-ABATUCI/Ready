@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { captureRequestLog } from "@/tests/support/request-log";
+import { captureRequestLog } from "@tests/support/request-log";
 import { POST } from "./route";
 
 const call = (body: string) =>

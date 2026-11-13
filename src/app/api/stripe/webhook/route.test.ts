@@ -1,7 +1,7 @@
 // @vitest-environment node
 import Stripe from "stripe";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { captureRequestLog } from "@/tests/support/request-log";
+import { captureRequestLog } from "@tests/support/request-log";
 import { POST } from "./route";
 
 const SECRET = "whsec_test_secret";

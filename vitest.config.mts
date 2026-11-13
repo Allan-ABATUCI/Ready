@@ -11,7 +11,9 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@": fileURLToPath(new URL("./", import.meta.url)),
+      "@/": fileURLToPath(new URL("./src/", import.meta.url)),
+      "@tests/": fileURLToPath(new URL("./tests/", import.meta.url)),
+      "@rule-packs/": fileURLToPath(new URL("./rule-packs/", import.meta.url)),
       // Route handlers run under the react-server condition in Next; in tests we stub the guard.
       "server-only": fileURLToPath(new URL("./tests/stubs/empty.ts", import.meta.url)),
     },
@@ -21,6 +23,6 @@ export default defineConfig({
     execArgv,
     setupFiles: ["./vitest.setup.ts"],
     include: ["**/*.test.{ts,tsx}"],
-    exclude: ["node_modules/**", "e2e/**", ".next/**"],
+    exclude: ["node_modules/**", "tests/e2e/**", ".next/**"],
   },
 });

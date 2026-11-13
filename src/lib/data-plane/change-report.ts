@@ -22,7 +22,7 @@ export const DETAIL_HEADERS = ["Row in export", "Column in your file", "Change",
  *
  * PRIVACY: the report quotes file values (before / after). Like the export, it
  * is only ever downloaded as a local blob; it must never be sent anywhere —
- * no upload, telemetry, error report or log (CLAUDE.md). `e2e/privacy.spec.ts`
+ * no upload, telemetry, error report or log (CLAUDE.md). `tests/e2e/privacy.spec.ts`
  * downloads it and checks no request carries it.
  */
 export function buildChangeReport(table: ExportTable, fileHeaders: string[]): { headers: string[]; rows: CsvRow[] } {

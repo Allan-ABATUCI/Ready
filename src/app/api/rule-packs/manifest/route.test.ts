@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { captureRequestLog } from "@/tests/support/request-log";
+import { captureRequestLog } from "@tests/support/request-log";
 
 const get = vi.fn();
 vi.mock("@vercel/edge-config", () => ({ createClient: vi.fn(() => ({ get })) }));

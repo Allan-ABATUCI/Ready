@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { syntheticContacts } from "@/tests/support/synthetic";
+import { syntheticContacts } from "@tests/support/synthetic";
 import { detectKeyColumns } from "./columns";
 import { parseCsv } from "./csv";
 import { findDuplicateCandidates as findWithRoles, keyRows, MAX_BLOCK, nameSignature, scorePair } from "./dedupe";

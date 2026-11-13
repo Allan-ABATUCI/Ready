@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
  * Rule-pack signing tool (ECDSA P-256 / SHA-256, IEEE P1363 signatures — the
- * format lib/rule-packs/verify.ts expects).
+ * format src/lib/rule-packs/verify.ts expects).
  *
  *   node scripts/rule-packs.mjs keygen   # writes .keys/rule-pack.private.jwk, prints the public JWK
  *   node scripts/rule-packs.mjs sign     # rule-packs/src/*.json → rule-packs/signed/*.json
  *
  * The private key path can be overridden with RULE_PACK_PRIVATE_KEY. Never
- * commit the private key; only the public JWK goes in lib/rule-packs/public-key.ts.
+ * commit the private key; only the public JWK goes in src/lib/rule-packs/public-key.ts.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";

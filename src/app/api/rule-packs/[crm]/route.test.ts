@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { captureRequestLog } from "@/tests/support/request-log";
+import { captureRequestLog } from "@tests/support/request-log";
 import { RULE_PACK_PUBLIC_KEY } from "@/lib/rule-packs/public-key";
 import { verifyRulePack } from "@/lib/rule-packs/verify";
 import { GET } from "./route";

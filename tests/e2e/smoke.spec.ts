@@ -1,16 +1,14 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { syntheticContacts } from "../tests/support/synthetic";
+import { syntheticContacts } from "../support/synthetic";
 import { answerConfirm, goToStep } from "./steps";
 
 test("profiles a file and shows duplicates side by side", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Ready" })).toBeVisible();
 
-  await page
-    .getByTestId("file-input")
-    .setInputFiles(path.join(__dirname, "..", "tests", "fixtures", "contacts-duplicates.csv"));
+  await page.getByTestId("file-input").setInputFiles(path.join(__dirname, "..", "fixtures", "contacts-duplicates.csv"));
   await expect(page.getByTestId("status")).toHaveText("Done.");
   await expect(page.getByRole("heading", { name: /Columns/ })).toContainText("9 rows");
   // "avery example" / "zoë müller" are single-case proper nouns.
@@ -45,9 +43,7 @@ test("profiles a file and shows duplicates side by side", async ({ page }) => {
 
 test("reads an Excel-saved Windows-1252 file without mangling accents", async ({ page }) => {
   await page.goto("/");
-  await page
-    .getByTestId("file-input")
-    .setInputFiles(path.join(__dirname, "..", "tests", "fixtures", "windows-1252.csv"));
+  await page.getByTestId("file-input").setInputFiles(path.join(__dirname, "..", "fixtures", "windows-1252.csv"));
   await expect(page.getByTestId("status")).toHaveText("Done.");
   await expect(page.getByTestId("encoding-note")).toContainText("Read as Windows-1252");
   await expect(page.getByRole("heading", { name: /Columns/ })).toContainText("3 rows");
@@ -64,9 +60,7 @@ test("reads an Excel-saved Windows-1252 file without mangling accents", async ({
 
 test("recognizes French headers and finds their duplicates automatically", async ({ page }) => {
   await page.goto("/");
-  await page
-    .getByTestId("file-input")
-    .setInputFiles(path.join(__dirname, "..", "tests", "fixtures", "contacts-fr.csv"));
+  await page.getByTestId("file-input").setInputFiles(path.join(__dirname, "..", "fixtures", "contacts-fr.csv"));
   await expect(page.getByTestId("status")).toHaveText("Done.");
   await expect(page.getByLabel("Use column 1 as")).toHaveValue("lastName");
   await expect(page.getByLabel("Use column 2 as")).toHaveValue("firstName");
@@ -82,7 +76,7 @@ test("lets the user assign a column the app didn't recognize", async ({ page }) 
   await page.goto("/");
   await page
     .getByTestId("file-input")
-    .setInputFiles(path.join(__dirname, "..", "tests", "fixtures", "unknown-email-header.csv"));
+    .setInputFiles(path.join(__dirname, "..", "fixtures", "unknown-email-header.csv"));
   await expect(page.getByTestId("status")).toHaveText("Done.");
   await expect(page.getByLabel("Use column 2 as")).toHaveValue("");
   await goToStep(page, "Review");
@@ -102,9 +96,7 @@ test("lets the user assign a column the app didn't recognize", async ({ page }) 
 
 test("warns before a role change clears merge decisions", async ({ page }) => {
   await page.goto("/");
-  await page
-    .getByTestId("file-input")
-    .setInputFiles(path.join(__dirname, "..", "tests", "fixtures", "contacts-duplicates.csv"));
+  await page.getByTestId("file-input").setInputFiles(path.join(__dirname, "..", "fixtures", "contacts-duplicates.csv"));
   await goToStep(page, "Review");
   await page.getByRole("button", { name: "Merge", exact: true }).click();
   await expect(page.getByTestId("review-progress")).toContainText("1 to merge");
@@ -129,7 +121,7 @@ test("warns before a role change clears merge decisions", async ({ page }) => {
 
 test("detects day-first dates and exports them as YYYY-MM-DD", async ({ page }) => {
   await page.goto("/");
-  await page.getByTestId("file-input").setInputFiles(path.join(__dirname, "..", "tests", "fixtures", "dates-eu.csv"));
+  await page.getByTestId("file-input").setInputFiles(path.join(__dirname, "..", "fixtures", "dates-eu.csv"));
   await expect(page.getByTestId("status")).toHaveText("Done.");
   // 31/12/2024 can only be day-first, so the ambiguous 05.03.2024 and 01/02/2023 are too.
   await expect(page.getByTestId("date-order").getByLabel("Dates are written as")).toHaveValue("dmy");
@@ -171,9 +163,7 @@ test("reviews many pairs: filter by email, merge all shown, undo", async ({ page
 
 test("fixes flagged cells in place, and the fixes reach the export", async ({ page }) => {
   await page.goto("/");
-  await page
-    .getByTestId("file-input")
-    .setInputFiles(path.join(__dirname, "..", "tests", "fixtures", "contacts-issues.csv"));
+  await page.getByTestId("file-input").setInputFiles(path.join(__dirname, "..", "fixtures", "contacts-issues.csv"));
   await expect(page.getByTestId("status")).toHaveText("Done.");
   const issues = page.getByTestId("issues");
 

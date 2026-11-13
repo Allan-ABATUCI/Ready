@@ -49,3 +49,11 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 14
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      # Builds the image, starts it and checks headers, rule packs, non-root user and no secrets.
+      - run: bash scripts/docker-smoke.sh

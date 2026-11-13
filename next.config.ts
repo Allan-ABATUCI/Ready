@@ -28,6 +28,9 @@ const csp = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // The Docker image runs the self-contained server from `.next/standalone`
+  // (see Dockerfile). Vercel and `next start` use the default output.
+  output: process.env.BUILD_STANDALONE === "1" ? "standalone" : undefined,
   poweredByHeader: false,
   // Next 16 blocks dev scripts on any origin but localhost, so the page renders
   // but never hydrates. 127.0.0.1 is safe to allow everywhere; LAN IPs are

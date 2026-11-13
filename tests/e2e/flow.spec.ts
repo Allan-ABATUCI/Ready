@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { buildXlsx } from "../support/xlsx";
 import { answerConfirm, goToStep } from "./steps";
@@ -179,4 +180,72 @@ test("leaves contacts already in the CRM out of the export", async ({ page }) =>
   await page.getByLabel("Leave them out of the export").uncheck();
   await goToStep(page, "Export");
   await expect(page.getByTestId("export-summary")).toContainText("12 rows → 12 after merging");
+});
+
+test("combines several files into one list, with the columns lined up by the user", async ({ page }) => {
+  const fixture = (name: string) => ({
+    name,
+    mimeType: "text/csv",
+    buffer: readFileSync(path.join(__dirname, "..", "fixtures", name)),
+  });
+  const workbook = {
+    name: "crm-leads.xlsx",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: Buffer.from(
+      buildXlsx([
+        ["Email address", "Full name"],
+        ["li.wei@example.test", "Wei Li"],
+      ]),
+    ),
+  };
+  await page.goto("/");
+  await page
+    .getByTestId("file-input")
+    .setInputFiles([fixture("multi-tradeshow.csv"), fixture("multi-webinar.csv"), workbook]);
+
+  // The proposed line-up: different names, same meaning.
+  const mapper = page.getByTestId("column-mapping");
+  await expect(mapper).toContainText("combining 3 files (6 rows)");
+  await expect(mapper.getByLabel("Email: column from multi-webinar.csv")).toHaveValue("0"); // "E-mail"
+  await expect(mapper.getByLabel("Phone: column from multi-webinar.csv")).toHaveValue("3"); // "Mobile"
+  await expect(mapper.getByLabel("Email: column from crm-leads.xlsx")).toHaveValue("0"); // "Email address"
+  // The user leaves the trade-show booth out.
+  await mapper.getByLabel("Booth: column from multi-tradeshow.csv").selectOption({ label: "— not in this file —" });
+  await expect(page.getByTestId("left-out-columns")).toContainText("Booth from multi-tradeshow.csv");
+  await mapper.getByRole("button", { name: "Combine 3 files →" }).click();
+
+  await expect(page.getByTestId("status")).toHaveText("Done.");
+  await expect(page.getByTestId("step-fix")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Columns/ })).toContainText("6 rows");
+
+  // Duplicates are found across files, and each side says where it's from.
+  await goToStep(page, "Review");
+  const review = page.getByTestId("step-review");
+  await expect(
+    review.getByRole("button", { name: "Jonas Berg (multi-tradeshow.csv) ↔ Jonas Berg (multi-webinar.csv)" }),
+  ).toBeVisible();
+  await review.getByRole("button", { name: /Merge all exact matches/ }).click();
+
+  await goToStep(page, "Export");
+  await page.getByLabel("HubSpot").check();
+  await page.getByLabel("Add a “Source file” column").check();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download CSV" }).click();
+  const csv = readFileSync((await (await download).path())!, "utf8");
+  const [header, ...lines] = csv.trim().split("\r\n");
+  expect(header).not.toContain("Booth");
+  expect(header!.split(",").at(-1)).toBe("Source file");
+  expect(lines.find((l) => l.includes("jonas.berg@example.test"))).toMatch(/multi-tradeshow\.csv; multi-webinar\.csv$/);
+  expect(lines.find((l) => l.includes("li.wei@example.test"))).toMatch(/multi-webinar\.csv; crm-leads\.xlsx$/);
+});
+
+test("won't combine a saved session with other files", async ({ page }) => {
+  await page.goto("/");
+  await page.getByTestId("file-input").setInputFiles([
+    { name: "a.csv", mimeType: "text/csv", buffer: Buffer.from("Email\na@example.test\n") },
+    { name: "b.ready.json", mimeType: "application/json", buffer: Buffer.from("{}") },
+  ]);
+  await expect(page.getByTestId("status")).toHaveText(
+    "A saved session can't be combined with other files. Drop it on its own.",
+  );
 });

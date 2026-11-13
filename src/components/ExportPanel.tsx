@@ -32,6 +32,7 @@ const OPTION_LABELS: Record<ExportToggle, string> = {
   fixEmailTypos: "Fix likely email typos (gmial.com → gmail.com)",
   normalizePhones: "International phone format (+33…)",
   isoDates: "Dates as YYYY-MM-DD",
+  sourceFile: "Add a “Source file” column",
 };
 
 const PREVIEW_ROWS = 20;
@@ -103,6 +104,8 @@ export function ExportPanel({
     const report = buildChangeReport(full, result.parsed.headers);
     download(`ready-${crm}-report.csv`, report.headers, report.rows);
   };
+  // Which file a row came from only means something when files were combined.
+  const shownOption = (k: ExportToggle) => k !== "sourceFile" || result.parsed.sources !== undefined;
   const activePack = rulePack && rulePack.crm === crm ? rulePack : null;
   const requirementGroups = useMemo(() => {
     if (!table || !activePack) return null;
@@ -135,7 +138,7 @@ export function ExportPanel({
       <fieldset className="mt-3">
         <legend className="text-sm font-medium text-slate-700">Clean-up</legend>
         <div className="mt-1 flex flex-wrap gap-4 text-sm">
-          {(Object.keys(OPTION_LABELS) as ExportToggle[]).map((k) => (
+          {(Object.keys(OPTION_LABELS) as ExportToggle[]).filter(shownOption).map((k) => (
             <label key={k} className="flex items-center gap-1">
               <input type="checkbox" checked={options[k]} onChange={(e) => onOption(k, e.target.checked)} />
               {OPTION_LABELS[k]}

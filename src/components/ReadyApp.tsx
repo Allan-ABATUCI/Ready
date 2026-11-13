@@ -7,7 +7,14 @@ import type { DateOrder } from "@/lib/data-plane/dates";
 import { applyOverrides } from "@/lib/data-plane/overrides";
 import type { CountryCode } from "@/lib/data-plane/phone";
 import { downloadText } from "@/lib/data-plane/export";
-import { analyzeInWorker, compareInWorker, processFileInWorker, resumeInWorker } from "@/lib/data-plane/run";
+import {
+  analyzeInWorker,
+  combineFilesInWorker,
+  compareInWorker,
+  inspectFilesInWorker,
+  processFileInWorker,
+  resumeInWorker,
+} from "@/lib/data-plane/run";
 import { buildSession, isSessionFileName, sessionFileName } from "@/lib/data-plane/session";
 import { sampleFile } from "@/lib/data-plane/sample";
 import { logEvent, toErrorCode, type ErrorCode } from "@/lib/diagnostics";
@@ -15,6 +22,7 @@ import type { Stage } from "@/lib/data-plane/types";
 import { loadVerifiedRulePack } from "@/lib/rule-packs/load";
 import { useReadyStore, type AnalysisRequest, type Step } from "@/lib/state/store";
 import { ConfirmProvider, useConfirm } from "./ConfirmDialog";
+import { ColumnMapper } from "./ColumnMapper";
 import { CrmCompare } from "./CrmCompare";
 import { DuplicateReview } from "./DuplicateReview";
 import { ExportPanel } from "./ExportPanel";
@@ -35,7 +43,12 @@ const STAGE_TEXT: Record<Stage, string> = {
 /** Entrance order of a panel's parts (see `.stagger` in globals.css). */
 const stagger = (i: number) => ({ "--i": i }) as CSSProperties;
 
+/** Name of a combined list, used for its saved session ("combined-contacts.ready.json"). */
+const COMBINED_FILE_NAME = "combined-contacts.csv";
+
 const ERROR_TEXT: Partial<Record<ErrorCode, string>> = {
+  session_with_files: "A saved session can't be combined with other files. Drop it on its own.",
+  mapping_invalid: "Those columns couldn't be combined. Drop the files again and check the columns.",
   session_invalid: "That doesn't look like a saved Ready session.",
   session_version: "That session was saved by a newer version of Ready. Reload the page and try again.",
   xlsx_invalid: "We couldn't read that Excel file. Try saving it again, or as CSV.",
@@ -66,6 +79,10 @@ function ReadyFlow() {
     status,
     errorCode,
     fileName,
+    combining,
+    startMapping,
+    setMapping,
+    cancelMapping,
     step,
     setStep,
     finishRestore,
@@ -125,17 +142,51 @@ function ReadyFlow() {
     if (crm) void loadVerifiedRulePack(crm).then((pack) => setRulePack(crm, pack));
   }, [crm, setRulePack]);
 
-  const onFile = async (file: File) => {
+  /** Loading anything replaces the current list; ask first if the user has done work on it. */
+  const confirmReplace = async () => {
     const hasWork = Object.keys(decisions).length > 0 || Object.keys(overrides).length > 0;
-    if (
-      status === "ready" &&
-      hasWork &&
-      !(await confirm("Loading another file replaces this one, with your fixes and merge decisions. Continue?", {
+    return (
+      status !== "ready" ||
+      !hasWork ||
+      (await confirm("Loading another file replaces this one, with your fixes and merge decisions. Continue?", {
         confirmLabel: "Load file",
       }))
-    ) {
+    );
+  };
+
+  const onFiles = async (files: File[]) => {
+    if (files.length === 1) return onFile(files[0]!);
+    if (!(await confirmReplace())) return;
+    if (files.some((f) => isSessionFileName(f.name))) {
+      logEvent({ kind: "error", code: "session_with_files" });
+      failProcessing("session_with_files");
       return;
     }
+    startProcessing(COMBINED_FILE_NAME);
+    try {
+      startMapping(files, await inspectFilesInWorker(files, setStage));
+    } catch (e) {
+      const code = toErrorCode(e);
+      logEvent({ kind: "error", code });
+      failProcessing(code);
+    }
+  };
+
+  const combineFiles = async () => {
+    const current = useReadyStore.getState().combining;
+    if (!current) return;
+    startProcessing(COMBINED_FILE_NAME);
+    try {
+      finishProcessing(await combineFilesInWorker(current.files, current.mapping, setStage));
+    } catch (e) {
+      const code = toErrorCode(e);
+      logEvent({ kind: "error", code });
+      failProcessing(code);
+    }
+  };
+
+  const onFile = async (file: File) => {
+    if (!(await confirmReplace())) return;
     startProcessing(file.name);
     try {
       if (isSessionFileName(file.name)) finishRestore(await resumeInWorker(file, setStage));
@@ -273,6 +324,7 @@ function ReadyFlow() {
           <p role="status" aria-live="polite" className="text-sm text-slate-600" data-testid="status">
             {(status === "processing" || reanalyzing) && (stage ? STAGE_TEXT[stage] : "Processing in your browser…")}
             {status === "error" && ((errorCode && ERROR_TEXT[errorCode]) ?? DEFAULT_ERROR_TEXT)}
+            {status === "mapping" && "Check how your files' columns line up, then combine them."}
             {status === "ready" && !reanalyzing && "Done."}
           </p>
           {ready && (
@@ -293,8 +345,19 @@ function ReadyFlow() {
         "upload",
         <>
           <div style={stagger(0)}>
-            <FileDrop onFile={onFile} disabled={status === "processing"} />
+            <FileDrop onFiles={(files) => void onFiles(files)} disabled={status === "processing"} />
           </div>
+          {status === "mapping" && combining && (
+            <div style={stagger(1)}>
+              <ColumnMapper
+                tables={combining.tables}
+                mapping={combining.mapping}
+                onChange={setMapping}
+                onConfirm={() => void combineFiles()}
+                onCancel={cancelMapping}
+              />
+            </div>
+          )}
           <div style={stagger(1)} className="flex flex-wrap items-center gap-3 text-sm">
             <span className="text-slate-500">No file at hand?</span>
             <button
@@ -340,6 +403,7 @@ function ReadyFlow() {
               </div>
               <div style={stagger(1)}>
                 <IssuesSummary
+                  sources={edited.parsed.sources}
                   headers={edited.parsed.headers}
                   rows={edited.parsed.rows}
                   issues={edited.cellIssues}

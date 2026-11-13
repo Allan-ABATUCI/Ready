@@ -13,7 +13,8 @@ import {
   type PairFilter,
   type PairSort,
 } from "@/lib/data-plane/review";
-import type { DuplicateCandidate, MatchField, ParsedCsv } from "@/lib/data-plane/types";
+import { describeRow, rowOrigin } from "@/lib/data-plane/sources";
+import type { DuplicateCandidate, MatchField, ParsedCsv, RowSources } from "@/lib/data-plane/types";
 import { useConfirm } from "./ConfirmDialog";
 import { CountUp } from "./CountUp";
 import { MergePreview } from "./MergePreview";
@@ -38,6 +39,12 @@ export interface DuplicateReviewProps {
 }
 
 const MATCH_LABELS: Record<MatchField, string> = { email: "Email", phone: "Phone", name: "Name", company: "Company" };
+
+/** For combined files, say which file each contact is from: that's often what tells two apart. */
+function withFile(label: string, sources: RowSources | undefined, row: number): string {
+  const { file } = rowOrigin(sources, row);
+  return file === null ? label : `${label} (${file})`;
+}
 
 /** Shortcuts must not fire while the user is typing or choosing in a form field. */
 function isFormField(target: EventTarget): boolean {
@@ -71,14 +78,14 @@ export function DuplicateReview({
         const c = candidates[index]!;
         return {
           index,
-          left: rowLabel(parsed.rows[c.a], c.a, roles),
-          right: rowLabel(parsed.rows[c.b], c.b, roles),
+          left: withFile(rowLabel(parsed.rows[c.a], c.a, roles), parsed.sources, c.a),
+          right: withFile(rowLabel(parsed.rows[c.b], c.b, roles), parsed.sources, c.b),
           matchedOn: c.matchedOn,
           score: c.score,
           status: pairStatus(c, decisions),
         };
       }),
-    [shown, candidates, parsed.rows, roles, decisions],
+    [shown, candidates, parsed.rows, parsed.sources, roles, decisions],
   );
 
   const current = candidates[selected];
@@ -318,8 +325,8 @@ export function DuplicateReview({
               headers={parsed.headers}
               left={parsed.rows[current.a] ?? []}
               right={parsed.rows[current.b] ?? []}
-              leftLabel={`Row ${current.a + 1}`}
-              rightLabel={`Row ${current.b + 1}`}
+              leftLabel={describeRow(parsed.sources, current.a)}
+              rightLabel={describeRow(parsed.sources, current.b)}
               choices={decision?.fields}
               onChoose={onChooseField ? (col, side) => onChooseField(selected, col, side) : undefined}
             />

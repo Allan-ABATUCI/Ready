@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { DateOrder } from "@/lib/data-plane/dates";
-import type { CellIssue, CellIssueCode } from "@/lib/data-plane/types";
+import { rowOrigin } from "@/lib/data-plane/sources";
+import type { CellIssue, CellIssueCode, RowSources } from "@/lib/data-plane/types";
 import { groupBy } from "@/lib/group";
 import { CountUp } from "./CountUp";
 import { DateOrderSelect } from "./DateOrderSelect";
@@ -90,7 +91,15 @@ function CellEditor({ value, label, suggestion, onSave, disabled }: CellEditorPr
   );
 }
 
+/** "12", or "3 of webinar.xlsx" for a row of a combined list. */
+function rowNumber(sources: RowSources | undefined, row: number): string {
+  const { line, file } = rowOrigin(sources, row);
+  return file === null ? String(line) : `${line} of ${file}`;
+}
+
 export interface IssuesSummaryProps {
+  /** For combined files: rows are numbered within the file they came from. */
+  sources?: RowSources;
   headers: string[];
   rows: string[][];
   issues: CellIssue[];
@@ -101,7 +110,15 @@ export interface IssuesSummaryProps {
   busy?: boolean;
 }
 
-export function IssuesSummary({ headers, rows, issues, onDateOrder, onEdit, busy = false }: IssuesSummaryProps) {
+export function IssuesSummary({
+  sources,
+  headers,
+  rows,
+  issues,
+  onDateOrder,
+  onEdit,
+  busy = false,
+}: IssuesSummaryProps) {
   const groups = groupIssues(issues);
   // Ambiguous dates only exist while the order is "not sure", so the picker starts there.
   const hasAmbiguousDates = issues.some((i) => i.code === "ambiguous_date");
@@ -153,7 +170,7 @@ export function IssuesSummary({ headers, rows, issues, onDateOrder, onEdit, busy
                         const value = rows[i.row]?.[i.col] ?? "";
                         return (
                           <tr key={i.row}>
-                            <td className="pr-4">{i.row + 1}</td>
+                            <td className="pr-4">{rowNumber(sources, i.row)}</td>
                             <td className="pr-4 break-words">{value}</td>
                             {hasSuggestions && <td className="pr-4">{i.suggestion}</td>}
                             {onEdit && (
@@ -161,7 +178,7 @@ export function IssuesSummary({ headers, rows, issues, onDateOrder, onEdit, busy
                                 <CellEditor
                                   key={value}
                                   value={value}
-                                  label={`Fix row ${i.row + 1}, ${column}`}
+                                  label={`Fix row ${rowNumber(sources, i.row)}, ${column}`}
                                   suggestion={i.suggestion}
                                   onSave={(v) => onEdit(i.row, i.col, v)}
                                   disabled={busy}

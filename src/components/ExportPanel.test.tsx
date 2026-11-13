@@ -250,3 +250,40 @@ describe("ExportPanel email typo option", () => {
     expect(screen.getByTestId("change-summary")).toHaveTextContent("Email typo fixed: 1");
   });
 });
+
+describe("ExportPanel source file option", () => {
+  it("is offered only for combined files, off by default, and adds the column when ticked", async () => {
+    const { unmount } = render(<Harness download={vi.fn()} />);
+    expect(screen.queryByLabelText("Add a “Source file” column")).not.toBeInTheDocument();
+    unmount();
+
+    const combined: ProcessResult = {
+      ...result,
+      parsed: { ...result.parsed, sources: { files: ["tradeshow.csv", "webinar.xlsx"], starts: [0, 1] } },
+    };
+    function Combined() {
+      const [options, setOptions] = useState<ExportOptions>(DEFAULT_EXPORT_OPTIONS);
+      return (
+        <ExportPanel
+          result={combined}
+          decisions={{}}
+          crm="hubspot"
+          options={options}
+          onCrm={() => {}}
+          onOption={(k, v) => setOptions((o) => ({ ...o, [k]: v }))}
+        />
+      );
+    }
+    render(<Combined />);
+    const box = screen.getByLabelText("Add a “Source file” column");
+    expect(box).not.toBeChecked();
+    expect(screen.getByTestId("export-summary")).not.toHaveTextContent("Source file");
+    await userEvent.click(box);
+    expect(screen.getByTestId("export-summary")).toHaveTextContent(
+      "columns: First Name, Last Name, Email, Source file",
+    );
+    const preview = screen.getByTestId("export-preview");
+    expect(within(preview).getByText("tradeshow.csv")).toBeInTheDocument();
+    expect(within(preview).getByText("webinar.xlsx")).toBeInTheDocument();
+  });
+});

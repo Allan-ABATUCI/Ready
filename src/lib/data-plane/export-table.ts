@@ -5,6 +5,7 @@ import { readDate } from "./dates";
 import { dateColumns } from "./issues";
 import type { MergeResult } from "./merge";
 import { toE164 } from "./phone";
+import { sourceFilesOf } from "./sources";
 import type { CellIssueCode, CsvRow, ProcessResult } from "./types";
 import { normalizeEmail } from "./validate";
 
@@ -28,9 +29,14 @@ export interface ExportOptions {
   normalizePhones: boolean;
   /** Rewrite date columns as YYYY-MM-DD, read in the analysis' date order; ambiguous or invalid values are kept. */
   isoDates: boolean;
+  /**
+   * Add a last column naming the file each contact came from (all of them, for
+   * a merged contact). Only applies to combined files; off by default.
+   */
+  sourceFile: boolean;
 }
 
-/** The options the UI shows as checkboxes: all of them. */
+/** The options the UI shows as checkboxes (`sourceFile` only for combined files). */
 export type ExportToggle = keyof ExportOptions;
 
 export type SetExportOption = (key: ExportToggle, value: boolean) => void;
@@ -42,7 +48,10 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   fixEmailTypos: false,
   normalizePhones: true,
   isoDates: true,
+  sourceFile: false,
 };
+
+export const SOURCE_FILE_HEADER = "Source file";
 
 /**
  * What cleaning did to a cell. The first six change the value; the `_unchanged`
@@ -184,10 +193,14 @@ export function buildExportTable(
       return v;
     });
 
-  const columns = planColumns(parsed.headers, crm, roles);
+  const sources = options.sourceFile ? parsed.sources : undefined;
+  const fileColumns = planColumns(parsed.headers, crm, roles);
+  const columns = sources ? [...fileColumns, sourceFileColumn(fileColumns)] : fileColumns;
   return {
     headers: columns.map((c) => c.header),
-    rows: merged.rows.map((row, r) => projectRow(clean(row, r), columns)),
+    rows: merged.rows.map((row, r) =>
+      projectRow(clean(row, r), columns, sources && sourceFilesOf(sources, merged.members[r] ?? [])),
+    ),
     columns,
     changes: {
       counts,
@@ -198,4 +211,12 @@ export function buildExportTable(
       cells,
     },
   };
+}
+
+/** The "Source file" column, renamed like `planColumns` does if the file already has a column by that name. */
+function sourceFileColumn(columns: OutputColumn[]): OutputColumn {
+  const taken = new Set(columns.map((c) => c.header.toLowerCase()));
+  let header = SOURCE_FILE_HEADER;
+  for (let n = 2; taken.has(header.toLowerCase()); n++) header = `${SOURCE_FILE_HEADER} (${n})`;
+  return { header, source: { kind: "sourceFile" } };
 }

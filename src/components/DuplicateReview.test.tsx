@@ -224,3 +224,20 @@ describe("DuplicateReview at scale", () => {
     expect(screen.getByTestId("current-pair")).toHaveTextContent("Pair 1 of 120");
   });
 });
+
+describe("DuplicateReview of combined files", () => {
+  beforeEach(() =>
+    load({ ...parsed, sources: { files: ["tradeshow.csv", "webinar.xlsx"], starts: [0, 1] } }, candidates, { name: 0 }),
+  );
+
+  it("says which file each contact is from, numbered as in that file", () => {
+    render(<Harness />);
+    const list = screen.getByTestId("pair-list");
+    expect(
+      within(list).getByRole("button", { name: "Avery Example (tradeshow.csv) ↔ avery example (webinar.xlsx)" }),
+    ).toBeInTheDocument();
+    const preview = screen.getByTestId("merge-preview");
+    expect(within(preview).getByText("Row 1 of tradeshow.csv")).toBeInTheDocument();
+    expect(within(preview).getByText("Row 1 of webinar.xlsx")).toBeInTheDocument();
+  });
+});

@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildExportTable, DEFAULT_EXPORT_OPTIONS, type ExportOptions } from "./export-table";
-import { applyDecisions } from "./merge";
+import { combineTables, proposeMapping } from "./combine";
+import { parseCsv } from "./csv";
+import { applyDecisions, pairKey } from "./merge";
 import type { CountryCode } from "./phone";
-import { processCsv } from "./process";
+import { processCsv, processParsed } from "./process";
 
 const text = readFileSync("tests/fixtures/contacts-duplicates.csv", "utf8");
 const result = processCsv(text);
@@ -28,6 +30,7 @@ describe("buildExportTable", () => {
       fixEmailTypos: false,
       normalizePhones: false,
       isoDates: false,
+      sourceFile: false,
     });
     expect(t.rows[1]).toEqual(["avery example", "AVERY@EXAMPLE.TEST", "", "Example Widgets Ltd."]);
     expect(t.rows[2]![2]).toBe("+44 20 7946 0000");
@@ -186,6 +189,7 @@ describe("buildExportTable", () => {
           fixEmailTypos: false,
           normalizePhones: false,
           isoDates: false,
+          sourceFile: false,
         },
         Infinity,
       ).changes;
@@ -223,5 +227,52 @@ describe("buildExportTable", () => {
         after: "zoë@hotmail.fr",
       });
     });
+  });
+});
+
+describe("the Source file column", () => {
+  const files = ["multi-tradeshow.csv", "multi-webinar.csv"].map((name) => ({
+    name,
+    parsed: parseCsv(readFileSync(`tests/fixtures/${name}`, "utf8")),
+  }));
+  const combined = processParsed(combineTables(files, proposeMapping(files.map((f) => f.parsed))));
+  const jonas = combined.duplicates.find((d) => d.a === 1 && d.b === 3)!;
+  const merged = applyDecisions(combined.parsed, combined.duplicates, {
+    [pairKey(jonas)]: { action: "merge", fields: {} },
+  });
+  const withSource = { ...DEFAULT_EXPORT_OPTIONS, sourceFile: true };
+
+  it("is off by default", () => {
+    expect(buildExportTable(combined, merged, "hubspot", DEFAULT_EXPORT_OPTIONS).headers).not.toContain("Source file");
+  });
+
+  it("names each contact's file, and every file of a merged contact", () => {
+    const t = buildExportTable(combined, merged, "hubspot", withSource);
+    expect(t.headers.at(-1)).toBe("Source file");
+    expect(t.rows.map((r) => r.at(-1))).toEqual([
+      "multi-tradeshow.csv",
+      "multi-tradeshow.csv; multi-webinar.csv", // Jonas Berg, in both files
+      "multi-tradeshow.csv",
+      "multi-webinar.csv",
+    ]);
+  });
+
+  it("is never added for a single file", () => {
+    expect(buildExportTable(result, noMerges, "hubspot", withSource).headers).not.toContain("Source file");
+  });
+
+  it("gets a new name if the file already has a Source file column", () => {
+    const own = processParsed(
+      combineTables(
+        [{ name: "a.csv", parsed: parseCsv("Email,Source file\na@example.test,fair\n") }],
+        [
+          { header: "Email", sources: [0] },
+          { header: "Source file", sources: [1] },
+        ],
+      ),
+    );
+    const t = buildExportTable(own, applyDecisions(own.parsed, [], {}), "hubspot", withSource);
+    expect(t.headers).toEqual(["Email", "Source file", "Source file (2)"]);
+    expect(t.rows).toEqual([["a@example.test", "fair", "a.csv"]]);
   });
 });

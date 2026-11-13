@@ -35,3 +35,18 @@ test("the confirmation dialog passes too", async ({ page }) => {
   await page.waitForTimeout(300);
   expect(await violations(page)).toEqual([]);
 });
+
+test("the column mapping screen for combined files passes too", async ({ page }) => {
+  await page.goto("/");
+  await page.getByTestId("file-input").setInputFiles([
+    { name: "a.csv", mimeType: "text/csv", buffer: Buffer.from("Email,Phone,Booth\na@example.test,555-0101,B1\n") },
+    { name: "b.csv", mimeType: "text/csv", buffer: Buffer.from("E-mail,Mobile\nb@example.test,555-0102\n") },
+  ]);
+  const mapper = page.getByTestId("column-mapping");
+  await expect(mapper).toBeVisible();
+  // Leave a column out, so the "left out" list is checked as well.
+  await mapper.getByLabel("Phone: column from b.csv").selectOption({ label: "— not in this file —" });
+  await expect(page.getByTestId("left-out-columns")).toBeVisible();
+  await page.waitForTimeout(400);
+  expect(await violations(page)).toEqual([]);
+});

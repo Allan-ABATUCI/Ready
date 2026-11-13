@@ -3,13 +3,14 @@
 import { useId, useState, useSyncExternalStore, type DragEvent } from "react";
 
 export interface FileDropProps {
-  onFile: (file: File) => void;
+  /** One or more files, in the order the browser lists them. Several are combined into one list. */
+  onFiles: (files: File[]) => void;
   disabled?: boolean;
 }
 
 const noSubscribe = () => () => {};
 
-export function FileDrop({ onFile, disabled = false }: FileDropProps) {
+export function FileDrop({ onFiles, disabled = false }: FileDropProps) {
   const inputId = useId();
   const [over, setOver] = useState(false);
   // Until React has hydrated, the input has no handler: picking a file would do
@@ -27,8 +28,8 @@ export function FileDrop({ onFile, disabled = false }: FileDropProps) {
   const onDrop = (e: DragEvent<HTMLLabelElement>) => {
     e.preventDefault();
     setOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file && !inactive) onFile(file);
+    const files = [...e.dataTransfer.files];
+    if (files.length > 0 && !inactive) onFiles(files);
   };
 
   return (
@@ -48,20 +49,23 @@ export function FileDrop({ onFile, disabled = false }: FileDropProps) {
       } ${inactive ? "pointer-events-none opacity-60" : ""}`}
     >
       <span className="text-lg font-medium text-slate-800">
-        {hydrated ? "Drop a CSV or Excel file here, or click to choose one" : "Loading…"}
+        {hydrated ? "Drop CSV or Excel files here, or click to choose" : "Loading…"}
       </span>
       <span className="mt-1 text-sm text-slate-500">Your file is processed in this browser and never uploaded.</span>
-      <span className="mt-1 text-xs text-slate-500">CSV, TSV, Excel (.xlsx, first sheet) or a saved Ready session</span>
+      <span className="mt-1 text-xs text-slate-500">
+        CSV, TSV, Excel (.xlsx, first sheet) or a saved Ready session. Several files are combined into one list.
+      </span>
       <input
         id={inputId}
         type="file"
+        multiple
         accept=".csv,text/csv,.tsv,.txt,text/tab-separated-values,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.json,application/json"
         className="sr-only"
         disabled={inactive}
         data-testid="file-input"
         onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onFile(file);
+          const files = [...(e.target.files ?? [])];
+          if (files.length > 0) onFiles(files);
           e.target.value = "";
         }}
       />

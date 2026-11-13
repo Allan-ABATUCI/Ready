@@ -125,3 +125,16 @@ describe("IssuesSummary", () => {
     expect(onEdit).toHaveBeenCalledWith(0, 0, "avery@gmail.com");
   });
 });
+
+describe("IssuesSummary of combined files", () => {
+  it("numbers rows within the file they came from", async () => {
+    const onEdit = vi.fn();
+    const sources = { files: ["tradeshow.csv", "webinar.xlsx"], starts: [0, 1] };
+    render(<IssuesSummary sources={sources} headers={headers} rows={rows} issues={issues} onEdit={onEdit} />);
+    await userEvent.click(screen.getByText("Invalid email"));
+    const item = screen.getAllByRole("listitem")[0]!;
+    expect(within(item).getByRole("cell", { name: "1 of tradeshow.csv" })).toBeInTheDocument();
+    expect(within(item).getByRole("cell", { name: "1 of webinar.xlsx" })).toBeInTheDocument();
+    expect(within(item).getByLabelText("Fix row 1 of webinar.xlsx, Email")).toBeInTheDocument();
+  });
+});

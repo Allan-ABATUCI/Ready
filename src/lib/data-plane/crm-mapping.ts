@@ -47,7 +47,9 @@ export type ColumnSource =
   | { kind: "col"; index: number }
   | { kind: "firstName"; index: number }
   | { kind: "lastName"; index: number }
-  | { kind: "join"; first: number | undefined; last: number | undefined };
+  | { kind: "join"; first: number | undefined; last: number | undefined }
+  /** The file(s) the row came from, for combined files (see `ExportOptions.sourceFile`). Not a file column. */
+  | { kind: "sourceFile" };
 
 export interface OutputColumn {
   header: string;
@@ -100,11 +102,13 @@ export function planColumns(headers: string[], crm: Crm, keys: ColumnRoles): Out
 
 /** The file columns an output column is made from. */
 export function sourceColumns(s: ColumnSource): number[] {
+  if (s.kind === "sourceFile") return [];
   if (s.kind !== "join") return [s.index];
   return [s.first, s.last].filter((c) => c !== undefined);
 }
 
-export function projectRow(row: CsvRow, columns: OutputColumn[]): CsvRow {
+/** One output row. `sourceFile` fills the "sourceFile" column, if there is one. */
+export function projectRow(row: CsvRow, columns: OutputColumn[], sourceFile = ""): CsvRow {
   const cell = (i: number | undefined) => (i === undefined ? "" : (row[i] ?? ""));
   return columns.map(({ source: s }) => {
     switch (s.kind) {
@@ -116,6 +120,8 @@ export function projectRow(row: CsvRow, columns: OutputColumn[]): CsvRow {
         return splitName(cell(s.index))[1];
       case "join":
         return joinName(cell(s.first), cell(s.last));
+      case "sourceFile":
+        return sourceFile;
     }
   });
 }

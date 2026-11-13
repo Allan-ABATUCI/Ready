@@ -49,12 +49,12 @@ export interface SessionState {
 }
 
 export function buildSession(s: SessionState): Session {
-  const { headers, rows, delimiter, hadBom, encoding, issues } = s.result.parsed;
+  const { headers, rows, delimiter, hadBom, encoding, issues, sources } = s.result.parsed;
   return {
     format: SESSION_FORMAT,
     version: SESSION_VERSION,
     fileName: s.fileName ?? "contacts.csv",
-    parsed: { headers, rows, delimiter, hadBom, encoding, issues },
+    parsed: { headers, rows, delimiter, hadBom, encoding, issues, ...(sources && { sources }) },
     inputs: { roles: s.result.roles, dateOrder: s.result.dateOrder, defaultCountry: s.result.defaultCountry },
     overrides: s.overrides,
     decisions: s.decisions,
@@ -122,6 +122,14 @@ export function parseSession(text: string): Session {
   }
   const width = parsed.headers.length;
   const height = parsed.rows.length;
+  // Optional: only sessions of combined files have it. Older sessions read as before.
+  const { sources } = parsed;
+  if (sources !== undefined) {
+    if (!isObject(sources) || !isStringArray(sources.files) || !Array.isArray(sources.starts)) invalid();
+    const { files, starts } = sources;
+    if (files.length === 0 || starts.length !== files.length || starts[0] !== 0) invalid();
+    if (!starts.every((s, i) => Number.isInteger(s) && s <= height && (i === 0 || s >= starts[i - 1]))) invalid();
+  }
 
   if (!isObject(inputs) || !isObject(inputs.roles)) invalid();
   const roles: ColumnRoles = {};
@@ -172,6 +180,9 @@ export function parseSession(text: string): Session {
         row: i.row as number | null,
         code: i.code as string,
       })),
+      ...(sources !== undefined && {
+        sources: { files: sources.files as string[], starts: sources.starts as number[] },
+      }),
     },
     inputs: {
       roles,

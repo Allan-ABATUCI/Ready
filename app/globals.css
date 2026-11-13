@@ -1,6 +1,0 @@
-@import "tailwindcss";
-
-body {
-  @apply bg-slate-50 text-slate-900 antialiased;
-  font-family: ui-sans-serif, system-ui, sans-serif; /* system fonts only: no font CDN calls */
-}

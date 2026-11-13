@@ -1,0 +1,6 @@
+{
+  "crm": "hubspot",
+  "version": "1.0.0",
+  "requiredFields": ["Email"],
+  "formats": { "Email": "email", "Phone Number": "phone" }
+}

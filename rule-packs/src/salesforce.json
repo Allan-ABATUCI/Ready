@@ -1,0 +1,6 @@
+{
+  "crm": "salesforce",
+  "version": "1.0.0",
+  "requiredFields": ["Last Name", "Company"],
+  "formats": { "Email": "email", "Phone": "phone" }
+}

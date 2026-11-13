@@ -1,0 +1,4 @@
+{
+  "payload": "{\"crm\":\"hubspot\",\"version\":\"1.0.0\",\"requiredFields\":[\"Email\"],\"formats\":{\"Email\":\"email\",\"Phone Number\":\"phone\"}}",
+  "signature": "MHZ9E1kvs9wS+oN42GDnTa3uffhx/5HlrttpfP8aizMrR6GP11uybHOv1fl0G8z/FIyNtN+518J3lrIegps0cw=="
+}

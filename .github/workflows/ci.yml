@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+# A newer push to the same branch or PR supersedes the running check.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Makes playwright.config.ts start a fresh server (no reuse) and forbid test.only.
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+      # No secrets: EDGE_CONFIG and STRIPE_WEBHOOK_SECRET are optional, and the tests stub them.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+      - run: npx playwright install --with-deps chromium
+      # Builds the app, then runs E2E (including the privacy test) against `next start`.
+      - run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      # Builds the image, starts it and checks headers, rule packs, non-root user and no secrets.
+      - run: bash scripts/docker-smoke.sh

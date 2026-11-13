@@ -46,7 +46,7 @@ export function PasteBox({ onFile, disabled = false }: { onFile: (file: File) =>
         <button
           type="button"
           disabled={disabled || text.trim() === ""}
-          className="rounded-lg bg-emerald-600 px-4 py-1.5 font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
+          className="rounded-lg bg-emerald-700 px-4 py-1.5 font-medium text-white hover:bg-emerald-800 disabled:opacity-40"
           onClick={() => {
             onFile(new File([text], PASTED_FILE_NAME, { type: "text/tab-separated-values" }));
             setText("");

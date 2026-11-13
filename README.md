@@ -150,7 +150,7 @@ Every network call the app makes must be listed here.
 
 ## Getting started
 
-**Stack:** Next.js (App Router) + TypeScript, React, Tailwind CSS, Zustand, PapaParse, fflate (unzipping `.xlsx` locally), Fuzzball, TanStack Table, Vercel Edge Config, Stripe (webhook only), Vitest + React Testing Library, Playwright, ESLint + Prettier.
+**Stack:** Next.js (App Router) + TypeScript, React, Tailwind CSS, Zustand, PapaParse, fflate (unzipping `.xlsx` locally), Fuzzball, TanStack Table, Vercel Edge Config, Stripe (webhook only), Vitest + React Testing Library, Playwright + axe-core, ESLint + Prettier.
 
 Requires Node ≥ 20.9 (Node 24 recommended, see `.nvmrc`). You can also open the repo in the **DevContainer** (`.devcontainer/`), which installs dependencies and Playwright Chromium for you.
 

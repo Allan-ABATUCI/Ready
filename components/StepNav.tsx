@@ -46,7 +46,7 @@ export function StepNav<S extends string>({ steps, current, onStep }: StepNavPro
                 <span
                   aria-hidden="true"
                   className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs transition-colors duration-200 ${
-                    active ? "bg-emerald-600 text-white" : done ? "bg-emerald-100 text-emerald-700" : "bg-slate-200"
+                    active ? "bg-emerald-700 text-white" : done ? "bg-emerald-100 text-emerald-700" : "bg-slate-200"
                   }`}
                 >
                   {done ? "✓" : i + 1}

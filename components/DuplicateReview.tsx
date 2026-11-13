@@ -277,7 +277,7 @@ export function DuplicateReview({
               <button
                 type="button"
                 aria-pressed={decision?.action === "merge"}
-                className="rounded-lg border px-3 py-1 font-medium aria-pressed:bg-emerald-600 aria-pressed:text-white"
+                className="rounded-lg border px-3 py-1 font-medium aria-pressed:bg-emerald-700 aria-pressed:text-white"
                 onClick={() => onDecide(selected, "merge")}
               >
                 Merge

@@ -51,7 +51,7 @@ export function FileDrop({ onFile, disabled = false }: FileDropProps) {
         {hydrated ? "Drop a CSV or Excel file here, or click to choose one" : "Loading…"}
       </span>
       <span className="mt-1 text-sm text-slate-500">Your file is processed in this browser and never uploaded.</span>
-      <span className="mt-1 text-xs text-slate-400">CSV, TSV, Excel (.xlsx, first sheet) or a saved Ready session</span>
+      <span className="mt-1 text-xs text-slate-500">CSV, TSV, Excel (.xlsx, first sheet) or a saved Ready session</span>
       <input
         id={inputId}
         type="file"

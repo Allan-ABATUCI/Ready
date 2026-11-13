@@ -71,7 +71,7 @@ export function MergePreview({
               aria-label={`Use ${label} value for ${f.field}`}
               className="mt-1"
             />
-            <span>{getValue() || <em className="text-slate-400">(empty)</em>}</span>
+            <span>{getValue() || <em className="text-slate-500">(empty)</em>}</span>
           </label>
         );
       };

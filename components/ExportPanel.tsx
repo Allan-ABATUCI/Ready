@@ -195,8 +195,8 @@ export function ExportPanel({
               </tbody>
             </table>
             <p className="mt-1 text-xs text-slate-500">
-              <span className="bg-emerald-50 px-1">Changed by clean-up</span>{" "}
-              <span className="bg-amber-100 px-1">Couldn&apos;t convert, left as written</span>
+              <span className="bg-emerald-50 px-1 text-slate-700">Changed by clean-up</span>{" "}
+              <span className="bg-amber-100 px-1 text-slate-700">Couldn&apos;t convert, left as written</span>
             </p>
           </div>
         </>
@@ -234,7 +234,7 @@ export function ExportPanel({
       <button
         type="button"
         disabled={!table || !crm}
-        className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
+        className="mt-3 rounded-lg bg-emerald-700 px-4 py-2 font-medium text-white hover:bg-emerald-800 disabled:opacity-40"
         onClick={downloadCleanCsv}
       >
         Download CSV

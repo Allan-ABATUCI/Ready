@@ -150,12 +150,15 @@ describe("block-size guard", () => {
 });
 
 describe("performance", () => {
-  it("handles 20,000 rows with varied names in under 3 s", () => {
+  // About 2.3 s alone; the budget leaves room for the rest of the suite running
+  // in parallel. Order-of-magnitude regressions still fail here, and
+  // e2e/performance.spec.ts times a 100,000-row file in a real browser.
+  it("handles 20,000 rows with varied names in under 5 s", () => {
     const parsed = parseCsv(syntheticContacts({ rows: 20_000, seed: 7 }));
     const start = performance.now();
     const { candidates } = findDuplicateCandidates(parsed);
     const ms = performance.now() - start;
     expect(candidates.length).toBeGreaterThan(0);
-    expect(ms).toBeLessThan(3000);
+    expect(ms).toBeLessThan(5000);
   });
 });

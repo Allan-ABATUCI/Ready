@@ -267,7 +267,8 @@ function ReadyFlow() {
 
       <StepNav steps={steps} current={step} onStep={setStep} />
 
-      <div className="flex min-h-6 flex-col gap-2">
+      {/* Always mounted, so screen readers announce status changes; collapsed while empty. */}
+      <div className={`flex flex-col gap-2 ${status === "idle" ? "-my-3" : "min-h-6"}`}>
         <div className="flex items-center justify-between gap-3">
           <p role="status" aria-live="polite" className="text-sm text-slate-600" data-testid="status">
             {(status === "processing" || reanalyzing) && (stage ? STAGE_TEXT[stage] : "Processing in your browser…")}
@@ -308,7 +309,7 @@ function ReadyFlow() {
             {ready && (
               <button
                 type="button"
-                className="ml-auto rounded-lg bg-emerald-600 px-4 py-1.5 font-medium text-white hover:bg-emerald-700"
+                className="ml-auto rounded-lg bg-emerald-700 px-4 py-1.5 font-medium text-white hover:bg-emerald-800"
                 onClick={() => setStep("fix")}
               >
                 Continue with this file →
@@ -416,7 +417,7 @@ function ReadyFlow() {
         </>
       )}
 
-      <footer className="text-xs text-slate-400">
+      <footer className="text-xs text-slate-500">
         {manifest ? `Rule packs: ${manifest.packs.map((p) => `${p.crm} ${p.version}`).join(" · ")}` : null}
       </footer>
     </main>
@@ -428,7 +429,7 @@ function NextButton({ children, onClick, style }: { children: ReactNode; onClick
     <div style={style} className="flex justify-end">
       <button
         type="button"
-        className="group rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white transition hover:bg-emerald-700"
+        className="group rounded-lg bg-emerald-700 px-4 py-2 font-medium text-white transition hover:bg-emerald-800"
         onClick={onClick}
       >
         {children}{" "}
